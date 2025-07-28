@@ -42,8 +42,7 @@ jobs:
 
   determine-environment:
     runs-on: ubuntu-latest
-    # Run for workflow_call, workflow_dispatch, or successful workflow_run
-    if: ${{ github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # Always run when called from orchestrated workflow
     outputs:
       environment: ${{ steps.env.outputs.environment }}
       should_run: ${{ steps.check.outputs.should_run }}
