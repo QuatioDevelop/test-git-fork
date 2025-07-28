@@ -159,16 +159,32 @@ jobs:
           echo "Frontend changed: '${{ needs.detect-changes.outputs.frontend-changed }}'"
           echo "Force backend: '${{ github.event.inputs.force_backend }}'"
           echo "Force frontend: '${{ github.event.inputs.force_frontend }}'"
+          echo "Environment: '${{ needs.detect-changes.outputs.environment }}'"
           echo ""
           
-          # Determine which path to take
-          BACKEND_DEPLOY=$([ "${{ needs.detect-changes.outputs.backend-changed }}" = "true" ] || [ "${{ github.event.inputs.force_backend }}" = "true" ] && echo "true" || echo "false")
+          # Backend only deploys in staging/prod, not in dev (main branch)
+          BACKEND_AVAILABLE=false
+          if [ "${{ needs.detect-changes.outputs.environment }}" = "staging" ] || [ "${{ needs.detect-changes.outputs.environment }}" = "prod" ]; then
+            BACKEND_AVAILABLE=true
+          fi
+          
+          echo "Backend deployment available in this environment: $BACKEND_AVAILABLE"
+          
+          # Determine which components need deployment
+          BACKEND_DEPLOY=false
+          FRONTEND_DEPLOY=false
+          
+          if [ "$BACKEND_AVAILABLE" = "true" ]; then
+            BACKEND_DEPLOY=$([ "${{ needs.detect-changes.outputs.backend-changed }}" = "true" ] || [ "${{ github.event.inputs.force_backend }}" = "true" ] && echo "true" || echo "false")
+          fi
+          
           FRONTEND_DEPLOY=$([ "${{ needs.detect-changes.outputs.frontend-changed }}" = "true" ] || [ "${{ github.event.inputs.force_frontend }}" = "true" ] && echo "true" || echo "false")
           
           echo "Backend needs deploy: $BACKEND_DEPLOY"
           echo "Frontend needs deploy: $FRONTEND_DEPLOY"
           echo ""
           
+          # Determine path based on what needs deployment
           if [ "$BACKEND_DEPLOY" = "true" ] && [ "$FRONTEND_DEPLOY" = "true" ]; then
             PATH_TYPE="backend-frontend"
             DESCRIPTION="Backend + Frontend deployment"
