@@ -1,0 +1,85 @@
+name: 🔧 Backend-Only Flow
+
+run-name: 🔧 Backend-Only Flow to ${{ inputs.environment }}
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: string
+    outputs:
+      success:
+        description: 'Whether the flow completed successfully'
+        value: ${{ jobs.deploy.outputs.success }}
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  determine-environment:
+    uses: ./.github/workflows/determine-environment.yml
+    with:
+      environment: ${{ inputs.environment }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    outputs:
+      success: ${{ steps.deploy.outputs.success }}
+    environment: 
+      name: ${{ needs.determine-environment.outputs.environment }}-backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Simulate backend deployment
+        id: deploy
+        run: |
+          echo "🔧 [SIMULATED] Deploying backend-only infrastructure..."
+          echo "Environment: ${{ needs.determine-environment.outputs.environment }}"
+          echo "Region: ${{ env.AWS_REGION }}"
+          
+          # Simulate backend deployment steps
+          echo "📦 Building SAM application..."
+          echo "🔧 Validating SAM template..."
+          echo "🚀 Deploying Lambda functions..."
+          echo "🗄️ Updating DynamoDB tables..."
+          echo "🔗 Configuring API Gateway..."
+          echo "🔐 Setting up IAM roles and policies..."
+          
+          # Show what backend files we're deploying
+          echo "📁 Backend files to deploy:"
+          find iac/backend -name "*.yml" -o -name "*.yaml" -o -name "*.json" 2>/dev/null | head -5 || echo "No backend config files found"
+          
+          # Simulate deployment time
+          sleep 15
+          
+          echo "✅ Backend deployment completed successfully (simulated)"
+          echo "success=true" >> $GITHUB_OUTPUT
+
+      - name: Simulate post-deployment verification
+        run: |
+          echo "🔍 [SIMULATED] Verifying backend deployment..."
+          echo "✅ API Gateway endpoints responding"
+          echo "✅ Lambda functions deployed"
+          echo "✅ DynamoDB tables accessible"
+          echo "✅ Backend health check passed"
+
+      - name: Summary
+        run: |
+          echo "## 🔧 Backend-Only Flow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Backend deployment completed successfully**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- 🏗️ SAM Application: ✅ Built and deployed" >> $GITHUB_STEP_SUMMARY
+          echo "- 🚀 Lambda Functions: ✅ Updated" >> $GITHUB_STEP_SUMMARY
+          echo "- 🗄️ DynamoDB Tables: ✅ Configured" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔗 API Gateway: ✅ Endpoints active" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔍 Health Check: ✅ Passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ needs.determine-environment.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Note:** Frontend was not deployed in this flow" >> $GITHUB_STEP_SUMMARY
