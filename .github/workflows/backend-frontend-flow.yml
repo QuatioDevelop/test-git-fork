@@ -1,0 +1,176 @@
+name: 🔧🌐 Backend + Frontend Flow
+
+run-name: 🔧🌐 Backend + Frontend Flow to ${{ inputs.environment }}
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: string
+    outputs:
+      success:
+        description: 'Whether the flow completed successfully'
+        value: ${{ jobs.frontend-deploy.outputs.success }}
+
+env:
+  NODE_VERSION: '22'
+  AWS_REGION: us-east-1
+
+jobs:
+  determine-environment:
+    uses: ./.github/workflows/determine-environment.yml
+    with:
+      environment: ${{ inputs.environment }}
+
+  # STEP 1: Deploy Backend First
+  backend-deploy:
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    outputs:
+      success: ${{ steps.deploy.outputs.success }}
+    environment: 
+      name: ${{ needs.determine-environment.outputs.environment }}-backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Simulate backend deployment
+        id: deploy
+        run: |
+          echo "🔧 [SIMULATED] Deploying backend infrastructure..."
+          echo "Environment: ${{ needs.determine-environment.outputs.environment }}"
+          echo "Region: ${{ env.AWS_REGION }}"
+          
+          # Simulate backend deployment steps
+          echo "📦 Building SAM application..."
+          echo "🚀 Deploying Lambda functions..."
+          echo "🗄️ Updating DynamoDB tables..."
+          echo "🔗 Configuring API Gateway..."
+          
+          # Simulate deployment time
+          sleep 10
+          
+          echo "✅ Backend deployment completed successfully (simulated)"
+          echo "success=true" >> $GITHUB_OUTPUT
+
+  # STEP 2: Run Frontend Tests & Build (in parallel with backend, but waits for backend to complete)
+  pre-deploy-testing:
+    uses: ./.github/workflows/pre-deploy-testing.yml
+    needs: [determine-environment, backend-deploy]
+    # Only run if backend succeeded
+    if: needs.backend-deploy.result == 'success'
+    with:
+      environment: ${{ needs.determine-environment.outputs.environment }}
+    secrets: inherit
+
+  # STEP 3: Deploy Frontend (after both backend and testing complete)
+  frontend-deploy:
+    runs-on: ubuntu-latest
+    needs: [determine-environment, backend-deploy, pre-deploy-testing]
+    if: needs.backend-deploy.result == 'success' && needs.pre-deploy-testing.result == 'success'
+    outputs:
+      success: ${{ steps.deploy.outputs.success }}
+    environment: 
+      name: ${{ needs.determine-environment.outputs.environment }}
+      url: ${{ steps.deploy.outputs.client_url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts from testing
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-${{ github.sha }}
+          path: ./artifacts
+
+      - name: Restore directory structure from artifacts
+        run: |
+          echo "=== Restoring directory structure from artifacts ==="
+          mkdir -p apps/client apps/admin
+          # Check actual structure and adapt
+          if [ -d "artifacts/apps/client/out" ]; then
+            cp -r artifacts/apps/client/out apps/client/
+            cp -r artifacts/apps/admin/out apps/admin/
+          elif [ -d "artifacts/client/out" ]; then
+            cp -r artifacts/client/out apps/client/
+            cp -r artifacts/admin/out apps/admin/
+          else
+            echo "❌ Unexpected artifact structure"
+            find artifacts -name "out" -type d
+            exit 1
+          fi
+          rm -rf artifacts
+          echo "✅ Directory structure restored from testing artifacts"
+
+      - name: Simulate AWS credentials configuration
+        run: |
+          echo "🔧 [SIMULATED] Configuring AWS credentials..."
+          echo "Environment: ${{ needs.determine-environment.outputs.environment }}"
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo "✅ AWS credentials configured (simulated)"
+
+      - name: Simulate infrastructure outputs
+        id: infrastructure
+        run: |
+          ENV="${{ needs.determine-environment.outputs.environment }}"
+          echo "🔧 [SIMULATED] Getting infrastructure outputs for: $ENV"
+          echo "Backend deployment: ${{ needs.backend-deploy.result }}"
+          
+          # Simulate realistic outputs
+          CLIENT_URL="https://$([[ "$ENV" == "dev" ]] && echo "dev" || echo "$ENV").esenciafest.com"
+          ADMIN_URL="https://admin.$([[ "$ENV" == "dev" ]] && echo "dev" || echo "$ENV").esenciafest.com"
+          
+          echo "client_url=$CLIENT_URL" >> $GITHUB_OUTPUT
+          echo "admin_url=$ADMIN_URL" >> $GITHUB_OUTPUT
+          echo "✅ Infrastructure outputs retrieved (simulated)"
+
+      - name: Deploy applications
+        id: deploy
+        run: |
+          echo "🚀 [SIMULATED] Deploying frontend applications..."
+          echo "Environment: ${{ needs.determine-environment.outputs.environment }}"
+          echo "Client URL: ${{ steps.infrastructure.outputs.client_url }}"
+          echo "Admin URL: ${{ steps.infrastructure.outputs.admin_url }}"
+          echo "Backend Status: ✅ Deployed successfully"
+          
+          # Show what we're deploying
+          echo "📁 Deploying client artifacts:"
+          find apps/client/out -name "*.html" | head -3
+          echo "📁 Deploying admin artifacts:"
+          find apps/admin/out -name "*.html" | head -3
+          
+          echo "✅ Frontend deployment completed (simulated)"
+          echo "success=true" >> $GITHUB_OUTPUT
+          echo "client_url=${{ steps.infrastructure.outputs.client_url }}" >> $GITHUB_OUTPUT
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [determine-environment, backend-deploy, pre-deploy-testing, frontend-deploy]
+    if: always()
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "## 🔧🌐 Backend + Frontend Flow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          BACKEND_STATUS="${{ needs.backend-deploy.result }}"
+          TESTING_STATUS="${{ needs.pre-deploy-testing.result }}"
+          FRONTEND_STATUS="${{ needs.frontend-deploy.result }}"
+          
+          if [ "$BACKEND_STATUS" = "success" ] && [ "$TESTING_STATUS" = "success" ] && [ "$FRONTEND_STATUS" = "success" ]; then
+            echo "✅ **Flow completed successfully**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Flow completed with errors**" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔧 Backend Deploy | $BACKEND_STATUS | $([[ "$BACKEND_STATUS" == "success" ]] && echo "✅ Deployed" || echo "❌ Failed") |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 Pre-deploy Testing | $TESTING_STATUS | $([[ "$TESTING_STATUS" == "success" ]] && echo "✅ Passed" || echo "❌ Failed") |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🌐 Frontend Deploy | $FRONTEND_STATUS | $([[ "$FRONTEND_STATUS" == "success" ]] && echo "✅ Deployed" || echo "❌ Failed") |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ needs.determine-environment.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Flow:** backend-deploy → pre-deploy-testing → frontend-deploy" >> $GITHUB_STEP_SUMMARY

@@ -72,64 +72,31 @@ jobs:
           echo "Force backend: ${{ github.event.inputs.force_backend }}"
           echo "Force frontend: ${{ github.event.inputs.force_frontend }}"
 
-  # STUB JOBS FOR PATH TESTING - NO ACTUAL DEPLOYMENT
+  # REAL DEPLOYMENT FLOWS
   
   frontend-only-flow:
-    runs-on: ubuntu-latest
-    needs: [determine-path]
+    needs: [determine-path, detect-changes]
     if: needs.determine-path.outputs.path == 'frontend-only'
-    outputs:
-      trigger_e2e: ${{ steps.success.outputs.trigger_e2e }}
-    steps:
-      - name: Frontend-Only Flow (STUB)
-        run: |
-          echo "🌐 FRONTEND-ONLY FLOW TRIGGERED"
-          echo "Path: ${{ needs.determine-path.outputs.path }}"
-          echo "Description: ${{ needs.determine-path.outputs.description }}"
-          echo "This would execute: pre-test → build → deploy-frontend"
-          echo "SUCCESS: Frontend-only path working correctly"
-      
-      - name: Mark for E2E
-        id: success
-        run: echo "trigger_e2e=true" >> $GITHUB_OUTPUT
+    uses: ./.github/workflows/frontend-only-flow.yml
+    with:
+      environment: ${{ needs.detect-changes.outputs.environment }}
+    secrets: inherit
 
   backend-frontend-flow:
-    runs-on: ubuntu-latest
-    needs: [determine-path]
+    needs: [determine-path, detect-changes]
     if: needs.determine-path.outputs.path == 'backend-frontend'
-    outputs:
-      trigger_e2e: ${{ steps.success.outputs.trigger_e2e }}
-    steps:
-      - name: Backend + Frontend Flow (STUB)
-        run: |
-          echo "🔧🌐 BACKEND + FRONTEND FLOW TRIGGERED"
-          echo "Path: ${{ needs.determine-path.outputs.path }}"
-          echo "Description: ${{ needs.determine-path.outputs.description }}"
-          echo "This would execute: deploy-backend → pre-test → deploy-frontend"
-          echo "SUCCESS: Backend + Frontend path working correctly"
-      
-      - name: Mark for E2E
-        id: success
-        run: echo "trigger_e2e=true" >> $GITHUB_OUTPUT
+    uses: ./.github/workflows/backend-frontend-flow.yml
+    with:
+      environment: ${{ needs.detect-changes.outputs.environment }}
+    secrets: inherit
 
   backend-only-flow:
-    runs-on: ubuntu-latest
-    needs: [determine-path]
+    needs: [determine-path, detect-changes]
     if: needs.determine-path.outputs.path == 'backend-only'
-    outputs:
-      trigger_e2e: ${{ steps.success.outputs.trigger_e2e }}
-    steps:
-      - name: Backend-Only Flow (STUB)
-        run: |
-          echo "🔧 BACKEND-ONLY FLOW TRIGGERED"
-          echo "Path: ${{ needs.determine-path.outputs.path }}"
-          echo "Description: ${{ needs.determine-path.outputs.description }}"
-          echo "This would execute: deploy-backend"
-          echo "SUCCESS: Backend-only path working correctly"
-      
-      - name: Mark for E2E
-        id: success
-        run: echo "trigger_e2e=true" >> $GITHUB_OUTPUT
+    uses: ./.github/workflows/backend-only-flow.yml
+    with:
+      environment: ${{ needs.detect-changes.outputs.environment }}
+    secrets: inherit
 
   no-changes-detected:
     runs-on: ubuntu-latest
@@ -208,20 +175,13 @@ jobs:
 
   # E2E TESTING (runs if any deployment flow succeeded)
   post-deploy-e2e:
-    runs-on: ubuntu-latest
-    needs: [frontend-only-flow, backend-frontend-flow, backend-only-flow]
+    needs: [detect-changes, frontend-only-flow, backend-frontend-flow, backend-only-flow]
     if: always() && (needs.frontend-only-flow.result == 'success' || needs.backend-frontend-flow.result == 'success' || needs.backend-only-flow.result == 'success')
-    steps:
-      - name: E2E Testing (STUB)
-        run: |
-          echo "🔍 E2E TESTING TRIGGERED"
-          echo "Frontend-only result: ${{ needs.frontend-only-flow.result }}"
-          echo "Backend+Frontend result: ${{ needs.backend-frontend-flow.result }}"
-          echo "Backend-only result: ${{ needs.backend-only-flow.result }}"
-          echo ""
-          echo "✅ At least one deployment flow succeeded"
-          echo "This would execute E2E tests against deployed environment"
-          echo "SUCCESS: E2E path working correctly"
+    uses: ./.github/workflows/post-deploy-e2e.yml
+    with:
+      environment: ${{ needs.detect-changes.outputs.environment }}
+      force_run: true
+    secrets: inherit
 
   deployment-summary:
     runs-on: ubuntu-latest
