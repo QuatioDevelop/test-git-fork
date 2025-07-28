@@ -24,18 +24,26 @@ jobs:
       - name: Determine environment
         id: env
         run: |
-          if [ "${{ github.event_name }}" = "workflow_call" ]; then
-            echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+          # Priority: 1) workflow_call input, 2) branch-based detection
+          if [ "${{ github.event_name }}" = "workflow_call" ] && [ -n "${{ inputs.environment }}" ]; then
+            ENVIRONMENT="${{ inputs.environment }}"
+            echo "🎯 Using injected environment from orchestrated workflow: $ENVIRONMENT"
           elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "environment=dev" >> $GITHUB_OUTPUT
+            ENVIRONMENT="dev"
+            echo "🎯 Branch-based environment (main): $ENVIRONMENT"
           elif [ "${{ github.ref }}" = "refs/heads/staging" ]; then
-            echo "environment=staging" >> $GITHUB_OUTPUT
+            ENVIRONMENT="staging"
+            echo "🎯 Branch-based environment (staging): $ENVIRONMENT"
           elif [ "${{ github.ref }}" = "refs/heads/production" ]; then
-            echo "environment=prod" >> $GITHUB_OUTPUT
+            ENVIRONMENT="prod"
+            echo "🎯 Branch-based environment (production): $ENVIRONMENT"
           else
-            echo "environment=dev" >> $GITHUB_OUTPUT
+            ENVIRONMENT="dev"
+            echo "🎯 Default environment (fallback): $ENVIRONMENT"
           fi
-          echo "🌍 Testing environment: ${{ steps.env.outputs.environment }}"
+          
+          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+          echo "🌍 Final testing environment: $ENVIRONMENT"
 
   tests:
     runs-on: ubuntu-latest
