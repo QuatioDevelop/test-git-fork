@@ -83,17 +83,17 @@ jobs:
 
   deploy-backend:
     needs: detect-changes
-    # Backend deployment only in staging/production (skip in main/dev)
-    if: (needs.detect-changes.outputs.backend-changed == 'true' || github.event.inputs.force_backend == 'true') && (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/production')
+    # SIMPLIFIED: Deploy backend if changed
+    if: needs.detect-changes.outputs.backend-changed == 'true' || github.event.inputs.force_backend == 'true'
     uses: ./.github/workflows/backend-deploy.yml
     with:
       environment: ${{ needs.detect-changes.outputs.environment }}
     secrets: inherit
 
   pre-deploy-testing:
-    needs: [detect-changes, deploy-backend]
-    # Run tests if frontend changed (after backend deployment if applicable)
-    if: ${{ always() && (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') }}
+    needs: detect-changes
+    # SIMPLIFIED: Run tests if frontend changed
+    if: needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true'
     uses: ./.github/workflows/pre-deploy-testing.yml
     with:
       environment: ${{ needs.detect-changes.outputs.environment }}
@@ -131,17 +131,17 @@ jobs:
 
   deploy-frontend:
     needs: [detect-changes, pre-deploy-testing]
-    # Deploy frontend if changed and tests passed
-    if: ${{ always() && (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') && needs.pre-deploy-testing.result == 'success' }}
+    # SIMPLIFIED: Deploy frontend if changed and tests passed
+    if: (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') && needs.pre-deploy-testing.result == 'success'
     uses: ./.github/workflows/frontend-deploy.yml
     with:
       environment: ${{ needs.detect-changes.outputs.environment }}
     secrets: inherit
 
   post-deploy-e2e:
-    needs: [detect-changes, deploy-backend, deploy-frontend]
-    # Run E2E tests after successful deployments (main only if frontend deployed successfully)
-    if: ${{ always() && ((github.ref == 'refs/heads/main' && needs.deploy-frontend.result == 'success') || ((github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/production') && (needs.deploy-frontend.result == 'success' || needs.deploy-backend.result == 'success'))) }}
+    needs: [deploy-backend, deploy-frontend]
+    # SIMPLIFIED: Run E2E if any deployment succeeded
+    if: always() && (needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success')
     uses: ./.github/workflows/post-deploy-e2e.yml
     with:
       environment: ${{ needs.detect-changes.outputs.environment }}
