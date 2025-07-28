@@ -132,7 +132,7 @@ jobs:
   deploy-frontend:
     needs: [detect-changes, pre-deploy-testing]
     # Deploy frontend if changed and tests passed
-    if: ${{ always() && (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') && needs.pre-deploy-testing.result == 'success' }}
+    if: always() && (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') && needs.pre-deploy-testing.result == 'success'
     uses: ./.github/workflows/frontend-deploy.yml
     with:
       environment: ${{ needs.detect-changes.outputs.environment }}

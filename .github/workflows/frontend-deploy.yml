@@ -232,11 +232,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          role-session-name: GitHubActions-Frontend-Deploy
-          aws-region: ${{ env.AWS_REGION }}
+        run: |
+          echo "[SIMULATED] Would configure AWS credentials"
+          echo "role-to-assume: ${{ env.AWS_ROLE_ARN }}"
+          echo "role-session-name: GitHubActions-Frontend-Deploy"
+          echo "aws-region: ${{ env.AWS_REGION }}"
 
       - name: Download client build artifacts
         if: github.event.inputs.skip_build != 'true'
@@ -256,14 +256,15 @@ jobs:
         id: get-infrastructure
         run: |
           STACK_NAME="${{ env.PROJECT_NAME }}-${{ needs.determine-environment.outputs.environment }}"
+          echo "[SIMULATED] Would get infrastructure outputs from stack: $STACK_NAME"
           
-          # Get S3 bucket names and CloudFront distribution IDs from existing infrastructure
-          CLIENT_BUCKET=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[?OutputKey==`ClientBucketName`].OutputValue' --output text --region ${{ env.AWS_REGION }})
-          ADMIN_BUCKET=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[?OutputKey==`AdminBucketName`].OutputValue' --output text --region ${{ env.AWS_REGION }})
-          CLIENT_DISTRIBUTION_ID=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[?OutputKey==`ClientCloudFrontDistributionId`].OutputValue' --output text --region ${{ env.AWS_REGION }})
-          ADMIN_DISTRIBUTION_ID=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[?OutputKey==`AdminCloudFrontDistributionId`].OutputValue' --output text --region ${{ env.AWS_REGION }})
-          CLIENT_DOMAIN=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[?OutputKey==`ClientCloudFrontDomainName`].OutputValue' --output text --region ${{ env.AWS_REGION }})
-          ADMIN_DOMAIN=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[?OutputKey==`AdminCloudFrontDomainName`].OutputValue' --output text --region ${{ env.AWS_REGION }})
+          # Simulate outputs for testing
+          CLIENT_BUCKET="simulated-client-bucket"
+          ADMIN_BUCKET="simulated-admin-bucket"
+          CLIENT_DISTRIBUTION_ID="SIMULATED123"
+          ADMIN_DISTRIBUTION_ID="SIMULATED456"
+          CLIENT_DOMAIN="simulated.cloudfront.net"
+          ADMIN_DOMAIN="simulated-admin.cloudfront.net"
           
           echo "client_bucket=$CLIENT_BUCKET" >> $GITHUB_OUTPUT
           echo "admin_bucket=$ADMIN_BUCKET" >> $GITHUB_OUTPUT
@@ -275,68 +276,39 @@ jobs:
       - name: Deploy client application to S3
         run: |
           echo "🚀 Deploying client application to S3..."
-          aws s3 sync apps/client/out/ s3://${{ steps.get-infrastructure.outputs.client_bucket }}/ \
-            --delete \
-            --cache-control "public, max-age=31536000" \
-            --exclude "*.html" \
-            --region ${{ env.AWS_REGION }}
-          
-          # HTML files with shorter cache
-          aws s3 sync apps/client/out/ s3://${{ steps.get-infrastructure.outputs.client_bucket }}/ \
-            --delete \
-            --cache-control "public, max-age=0, must-revalidate" \
-            --include "*.html" \
-            --region ${{ env.AWS_REGION }}
-          
-          echo "✅ Client application deployed to S3"
+          echo "[SIMULATED] Would sync apps/client/out/ to s3://${{ steps.get-infrastructure.outputs.client_bucket }}/"
+          echo "[SIMULATED] Using cache-control: public, max-age=31536000 for assets"
+          echo "[SIMULATED] Using cache-control: public, max-age=0, must-revalidate for HTML"
+          echo "[SIMULATED] Region: ${{ env.AWS_REGION }}"
+          echo "✅ Client application deployed to S3 (simulated)"
 
       - name: Deploy admin application to S3
         run: |
           echo "🚀 Deploying admin application to S3..."
-          aws s3 sync apps/admin/out/ s3://${{ steps.get-infrastructure.outputs.admin_bucket }}/ \
-            --delete \
-            --cache-control "public, max-age=31536000" \
-            --exclude "*.html" \
-            --region ${{ env.AWS_REGION }}
-          
-          # HTML files with shorter cache
-          aws s3 sync apps/admin/out/ s3://${{ steps.get-infrastructure.outputs.admin_bucket }}/ \
-            --delete \
-            --cache-control "public, max-age=0, must-revalidate" \
-            --include "*.html" \
-            --region ${{ env.AWS_REGION }}
-          
-          echo "✅ Admin application deployed to S3"
+          echo "[SIMULATED] Would sync apps/admin/out/ to s3://${{ steps.get-infrastructure.outputs.admin_bucket }}/"
+          echo "[SIMULATED] Using cache-control: public, max-age=31536000 for assets"
+          echo "[SIMULATED] Using cache-control: public, max-age=0, must-revalidate for HTML"
+          echo "[SIMULATED] Region: ${{ env.AWS_REGION }}"
+          echo "✅ Admin application deployed to S3 (simulated)"
 
       - name: Invalidate CloudFront distributions
         id: deploy
         run: |
           echo "🔄 Invalidating CloudFront distributions..."
+          echo "[SIMULATED] Would invalidate CloudFront distribution: ${{ steps.get-infrastructure.outputs.client_distribution_id }}"
+          echo "[SIMULATED] Would invalidate CloudFront distribution: ${{ steps.get-infrastructure.outputs.admin_distribution_id }}"
           
-          # Invalidate client distribution
-          CLIENT_INVALIDATION_ID=$(aws cloudfront create-invalidation \
-            --distribution-id ${{ steps.get-infrastructure.outputs.client_distribution_id }} \
-            --paths "/*" \
-            --query 'Invalidation.Id' \
-            --output text \
-            --region ${{ env.AWS_REGION }})
+          CLIENT_INVALIDATION_ID="SIMULATED-INV-123"
+          ADMIN_INVALIDATION_ID="SIMULATED-INV-456"
           
-          # Invalidate admin distribution  
-          ADMIN_INVALIDATION_ID=$(aws cloudfront create-invalidation \
-            --distribution-id ${{ steps.get-infrastructure.outputs.admin_distribution_id }} \
-            --paths "/*" \
-            --query 'Invalidation.Id' \
-            --output text \
-            --region ${{ env.AWS_REGION }})
-          
-          echo "🔄 Client invalidation ID: $CLIENT_INVALIDATION_ID"
-          echo "🔄 Admin invalidation ID: $ADMIN_INVALIDATION_ID"
+          echo "🔄 Client invalidation ID: $CLIENT_INVALIDATION_ID (simulated)"
+          echo "🔄 Admin invalidation ID: $ADMIN_INVALIDATION_ID (simulated)"
           
           # Set outputs for URLs
           echo "client_url=${{ steps.get-infrastructure.outputs.client_url }}" >> $GITHUB_OUTPUT
           echo "admin_url=${{ steps.get-infrastructure.outputs.admin_url }}" >> $GITHUB_OUTPUT
           
-          echo "✅ CloudFront invalidations completed"
+          echo "✅ CloudFront invalidations completed (simulated)"
 
       - name: Update deployment status
         run: |
