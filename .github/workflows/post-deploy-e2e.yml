@@ -44,68 +44,15 @@ jobs:
           echo "Should run condition: ${{ github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}"
 
   determine-environment:
-    runs-on: ubuntu-latest
-    # Always run, but use injected environment when available
-    outputs:
-      environment: ${{ inputs.environment || steps.env.outputs.environment }}
-      should_run: ${{ steps.check.outputs.should_run }}
-    steps:
-      - name: Determine environment
-        id: env
-        run: |
-          echo "=== ENVIRONMENT DETECTION DEBUG ==="
-          echo "Event name: '${{ github.event_name }}'"
-          echo "Inputs environment: '${{ inputs.environment }}'"
-          echo "Github ref: '${{ github.ref }}'"
-          echo "Should skip check: event_name='${{ github.event_name }}' && inputs.environment='${{ inputs.environment }}'"
-          
-          # Priority: 1) injected input (from orchestrated workflow), 2) workflow_dispatch input, 3) branch-based detection
-          if [ -n "${{ inputs.environment }}" ]; then
-            ENVIRONMENT="${{ inputs.environment }}"
-            echo "🎯 Using injected environment from orchestrated workflow: $ENVIRONMENT"
-            echo "⚡ FAST PATH: Environment was injected, skipping branch detection"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ENVIRONMENT="${{ github.event.inputs.environment }}"
-            echo "🎯 Using manual dispatch environment: $ENVIRONMENT"
-          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            ENVIRONMENT="dev"
-            echo "🎯 Branch-based environment (main): $ENVIRONMENT"
-          elif [ "${{ github.ref }}" = "refs/heads/staging" ]; then
-            ENVIRONMENT="staging"
-            echo "🎯 Branch-based environment (staging): $ENVIRONMENT"
-          elif [ "${{ github.ref }}" = "refs/heads/production" ]; then
-            ENVIRONMENT="prod"
-            echo "🎯 Branch-based environment (production): $ENVIRONMENT"
-          else
-            ENVIRONMENT="dev"
-            echo "🎯 Default environment (fallback): $ENVIRONMENT"
-          fi
-          
-          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
-          echo "📍 Final environment: $ENVIRONMENT"
-          echo "=== END ENVIRONMENT DEBUG ==="
-          
-      - name: Check if should run
-        id: check
-        run: |
-          # Run for all branches (dev, staging, production) or manual trigger, or when forced
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || 
-             [[ "${{ github.ref }}" == "refs/heads/staging" ]] || 
-             [[ "${{ github.ref }}" == "refs/heads/production" ]] || 
-             [[ "${{ github.event_name }}" == "workflow_dispatch" ]] ||
-             [[ "${{ inputs.force_run }}" == "true" ]]; then
-            echo "should_run=true" >> $GITHUB_OUTPUT
-            echo "✅ E2E tests enabled for this environment/trigger"
-          else
-            echo "should_run=false" >> $GITHUB_OUTPUT
-            echo "❌ E2E tests disabled for this environment/trigger"
-          fi
+    uses: ./.github/workflows/determine-environment.yml
+    with:
+      environment: ${{ inputs.environment }}
 
   e2e-tests:
     runs-on: ubuntu-latest
     needs: determine-environment
-    # Run if: standalone execution with should_run=true OR workflow_call with injected environment
-    if: always() && (needs.determine-environment.outputs.should_run == 'true' || (github.event_name == 'workflow_call' && inputs.environment != ''))
+    # Run if: E2E should run for this environment OR forced
+    if: always() && (needs.determine-environment.outputs.should_run_e2e == 'true' || inputs.force_run == 'true')
     timeout-minutes: 10
     steps:
       - name: Checkout code
@@ -124,11 +71,11 @@ jobs:
 
       - name: Run E2E tests against deployed environment
         env:
-          # Use injected environment if available, otherwise use determined environment
-          TEST_ENV: ${{ inputs.environment || needs.determine-environment.outputs.environment }}
+          # Use environment from unified detection
+          TEST_ENV: ${{ needs.determine-environment.outputs.environment }}
           E2E_TEST_SECRET: ${{ secrets.E2E_TEST_SECRET }}
-          CLIENT_URL: ${{ (inputs.environment || needs.determine-environment.outputs.environment) == 'dev' && 'https://dev.esenciafest.com' || (inputs.environment || needs.determine-environment.outputs.environment) == 'staging' && 'https://staging.esenciafest.com' || 'https://esenciafest.com' }}
-          NEXT_PUBLIC_API_BASE_URL: ${{ (inputs.environment || needs.determine-environment.outputs.environment) == 'dev' && 'https://api.dev.esenciafest.com' || (inputs.environment || needs.determine-environment.outputs.environment) == 'staging' && 'https://api.staging.esenciafest.com' || 'https://api.esenciafest.com' }}
+          CLIENT_URL: ${{ needs.determine-environment.outputs.environment == 'dev' && 'https://dev.esenciafest.com' || needs.determine-environment.outputs.environment == 'staging' && 'https://staging.esenciafest.com' || 'https://esenciafest.com' }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ needs.determine-environment.outputs.environment == 'dev' && 'https://api.dev.esenciafest.com' || needs.determine-environment.outputs.environment == 'staging' && 'https://api.staging.esenciafest.com' || 'https://api.esenciafest.com' }}
         run: |
           echo "🌍 Testing against $TEST_ENV environment"
           echo "🔗 Client URL: $CLIENT_URL"

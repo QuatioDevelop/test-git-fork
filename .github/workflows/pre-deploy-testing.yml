@@ -17,42 +17,9 @@ env:
 
 jobs:
   determine-environment:
-    runs-on: ubuntu-latest
-    # Always run, but use injected environment when available
-    outputs:
-      environment: ${{ inputs.environment || steps.env.outputs.environment }}
-    steps:
-      - name: Determine environment
-        id: env
-        run: |
-          echo "=== PRE-DEPLOY TESTING ENVIRONMENT DEBUG ==="
-          echo "Event name: '${{ github.event_name }}'"
-          echo "Inputs environment: '${{ inputs.environment }}'"
-          echo "Github ref: '${{ github.ref }}'"
-          echo "Should skip check: event_name='${{ github.event_name }}' && inputs.environment='${{ inputs.environment }}'"
-          
-          # Priority: 1) injected input (from orchestrated workflow), 2) branch-based detection
-          if [ -n "${{ inputs.environment }}" ]; then
-            ENVIRONMENT="${{ inputs.environment }}"
-            echo "🎯 Using injected environment from orchestrated workflow: $ENVIRONMENT"
-            echo "⚡ FAST PATH: Environment was injected, skipping branch detection"
-          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            ENVIRONMENT="dev"
-            echo "🎯 Branch-based environment (main): $ENVIRONMENT"
-          elif [ "${{ github.ref }}" = "refs/heads/staging" ]; then
-            ENVIRONMENT="staging"
-            echo "🎯 Branch-based environment (staging): $ENVIRONMENT"
-          elif [ "${{ github.ref }}" = "refs/heads/production" ]; then
-            ENVIRONMENT="prod"
-            echo "🎯 Branch-based environment (production): $ENVIRONMENT"
-          else
-            ENVIRONMENT="dev"
-            echo "🎯 Default environment (fallback): $ENVIRONMENT"
-          fi
-          
-          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
-          echo "🌍 Final testing environment: $ENVIRONMENT"
-          echo "=== END PRE-DEPLOY TESTING DEBUG ==="
+    uses: ./.github/workflows/determine-environment.yml
+    with:
+      environment: ${{ inputs.environment }}
 
   tests:
     runs-on: ubuntu-latest
@@ -75,9 +42,9 @@ jobs:
         run: |
           # Copy appropriate .env file to .env.local for each app based on branch environment
           # Use injected environment if available, otherwise use determined environment
-          ENVIRONMENT="${{ inputs.environment || needs.determine-environment.outputs.environment }}"
+          ENVIRONMENT="${{ needs.determine-environment.outputs.environment }}"
           echo "🎯 Using environment: $ENVIRONMENT"
-          echo "📍 Environment source: ${{ github.event_name == 'workflow_call' && 'injected from orchestrated workflow' || 'determined locally' }}"
+          echo "📍 Environment source: unified detection workflow"
           
           if [ "$ENVIRONMENT" = "dev" ]; then
             cp apps/client/.env.development apps/client/.env.local
@@ -125,9 +92,9 @@ jobs:
         run: |
           # Copy appropriate .env file to .env.local for each app based on branch environment
           # Use injected environment if available, otherwise use determined environment
-          ENVIRONMENT="${{ inputs.environment || needs.determine-environment.outputs.environment }}"
+          ENVIRONMENT="${{ needs.determine-environment.outputs.environment }}"
           echo "🎯 Using environment: $ENVIRONMENT"
-          echo "📍 Environment source: ${{ github.event_name == 'workflow_call' && 'injected from orchestrated workflow' || 'determined locally' }}"
+          echo "📍 Environment source: unified detection workflow"
           
           if [ "$ENVIRONMENT" = "dev" ]; then
             cp apps/client/.env.development apps/client/.env.local
