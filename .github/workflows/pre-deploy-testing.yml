@@ -18,6 +18,8 @@ env:
 jobs:
   determine-environment:
     runs-on: ubuntu-latest
+    # Skip if environment was injected via workflow_call, run if standalone
+    if: ${{ github.event_name != 'workflow_call' || inputs.environment == '' }}
     outputs:
       environment: ${{ steps.env.outputs.environment }}
     steps:
@@ -48,6 +50,7 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     needs: determine-environment
+    if: always()  # Run regardless of determine-environment result
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -64,17 +67,22 @@ jobs:
       - name: Configure environment variables
         run: |
           # Copy appropriate .env file to .env.local for each app based on branch environment
-          if [ "${{ needs.determine-environment.outputs.environment }}" = "dev" ]; then
+          # Use injected environment if available, otherwise use determined environment
+          ENVIRONMENT="${{ inputs.environment || needs.determine-environment.outputs.environment }}"
+          echo "🎯 Using environment: $ENVIRONMENT"
+          echo "📍 Environment source: ${{ github.event_name == 'workflow_call' && 'injected from orchestrated workflow' || 'determined locally' }}"
+          
+          if [ "$ENVIRONMENT" = "dev" ]; then
             cp apps/client/.env.development apps/client/.env.local
             cp apps/admin/.env.development apps/admin/.env.local || echo "No .env.development for admin, using defaults"
-          elif [ "${{ needs.determine-environment.outputs.environment }}" = "staging" ]; then
+          elif [ "$ENVIRONMENT" = "staging" ]; then
             cp apps/client/.env.staging apps/client/.env.local
             cp apps/admin/.env.staging apps/admin/.env.local || echo "No .env.staging for admin, using defaults"
-          elif [ "${{ needs.determine-environment.outputs.environment }}" = "prod" ]; then
+          elif [ "$ENVIRONMENT" = "prod" ]; then
             cp apps/client/.env.production apps/client/.env.local
             cp apps/admin/.env.production apps/admin/.env.local || echo "No .env.production for admin, using defaults"
           fi
-          echo "🌍 Environment variables configured for: ${{ needs.determine-environment.outputs.environment }}"
+          echo "🌍 Environment variables configured for: $ENVIRONMENT"
 
       - name: Run unit tests
         run: |
@@ -109,17 +117,22 @@ jobs:
       - name: Configure environment variables
         run: |
           # Copy appropriate .env file to .env.local for each app based on branch environment
-          if [ "${{ needs.determine-environment.outputs.environment }}" = "dev" ]; then
+          # Use injected environment if available, otherwise use determined environment
+          ENVIRONMENT="${{ inputs.environment || needs.determine-environment.outputs.environment }}"
+          echo "🎯 Using environment: $ENVIRONMENT"
+          echo "📍 Environment source: ${{ github.event_name == 'workflow_call' && 'injected from orchestrated workflow' || 'determined locally' }}"
+          
+          if [ "$ENVIRONMENT" = "dev" ]; then
             cp apps/client/.env.development apps/client/.env.local
             cp apps/admin/.env.development apps/admin/.env.local || echo "No .env.development for admin, using defaults"
-          elif [ "${{ needs.determine-environment.outputs.environment }}" = "staging" ]; then
+          elif [ "$ENVIRONMENT" = "staging" ]; then
             cp apps/client/.env.staging apps/client/.env.local
             cp apps/admin/.env.staging apps/admin/.env.local || echo "No .env.staging for admin, using defaults"
-          elif [ "${{ needs.determine-environment.outputs.environment }}" = "prod" ]; then
+          elif [ "$ENVIRONMENT" = "prod" ]; then
             cp apps/client/.env.production apps/client/.env.local
             cp apps/admin/.env.production apps/admin/.env.local || echo "No .env.production for admin, using defaults"
           fi
-          echo "🌍 Environment variables configured for: ${{ needs.determine-environment.outputs.environment }}"
+          echo "🌍 Environment variables configured for: $ENVIRONMENT"
 
       - name: Build and validate applications
         run: |

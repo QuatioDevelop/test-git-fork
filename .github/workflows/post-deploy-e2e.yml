@@ -45,7 +45,8 @@ jobs:
 
   determine-environment:
     runs-on: ubuntu-latest
-    # Always run when called from orchestrated workflow
+    # Skip if environment was injected via workflow_call, run if standalone
+    if: ${{ github.event_name != 'workflow_call' || inputs.environment == '' }}
     outputs:
       environment: ${{ steps.env.outputs.environment }}
       should_run: ${{ steps.check.outputs.should_run }}
@@ -96,7 +97,8 @@ jobs:
   e2e-tests:
     runs-on: ubuntu-latest
     needs: determine-environment
-    if: needs.determine-environment.outputs.should_run == 'true'
+    # Run if: standalone execution with should_run=true OR workflow_call with injected environment
+    if: always() && (needs.determine-environment.outputs.should_run == 'true' || (github.event_name == 'workflow_call' && inputs.environment != ''))
     timeout-minutes: 10
     steps:
       - name: Checkout code
@@ -115,14 +117,24 @@ jobs:
 
       - name: Run E2E tests against deployed environment
         env:
-          TEST_ENV: ${{ needs.determine-environment.outputs.environment }}
+          # Use injected environment if available, otherwise use determined environment
+          TEST_ENV: ${{ inputs.environment || needs.determine-environment.outputs.environment }}
           E2E_TEST_SECRET: ${{ secrets.E2E_TEST_SECRET }}
-          CLIENT_URL: ${{ needs.determine-environment.outputs.environment == 'staging' && 'https://staging.esenciafest.com' || 'https://esenciafest.com' }}
-          NEXT_PUBLIC_API_BASE_URL: ${{ needs.determine-environment.outputs.environment == 'staging' && 'https://api.staging.esenciafest.com' || 'https://api.esenciafest.com' }}
+          CLIENT_URL: ${{ 
+            (inputs.environment || needs.determine-environment.outputs.environment) == 'dev' && 'https://dev.esenciafest.com' ||
+            (inputs.environment || needs.determine-environment.outputs.environment) == 'staging' && 'https://staging.esenciafest.com' || 
+            'https://esenciafest.com' 
+          }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ 
+            (inputs.environment || needs.determine-environment.outputs.environment) == 'dev' && 'https://api.dev.esenciafest.com' ||
+            (inputs.environment || needs.determine-environment.outputs.environment) == 'staging' && 'https://api.staging.esenciafest.com' || 
+            'https://api.esenciafest.com' 
+          }}
         run: |
-          echo "🌍 Testing against ${{ needs.determine-environment.outputs.environment }} environment"
+          echo "🌍 Testing against $TEST_ENV environment"
           echo "🔗 Client URL: $CLIENT_URL"
           echo "🔗 API URL: $NEXT_PUBLIC_API_BASE_URL"
+          echo "📍 Environment source: ${{ github.event_name == 'workflow_call' && 'injected from orchestrated workflow' || 'determined locally' }}"
           echo "🧪 Running E2E tests..."
           npm run test:e2e
 
