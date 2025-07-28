@@ -31,8 +31,8 @@ jobs:
           echo "Github ref: '${{ github.ref }}'"
           echo "Should skip check: event_name='${{ github.event_name }}' && inputs.environment='${{ inputs.environment }}'"
           
-          # Priority: 1) workflow_call input, 2) branch-based detection
-          if [ "${{ github.event_name }}" = "workflow_call" ] && [ -n "${{ inputs.environment }}" ]; then
+          # Priority: 1) injected input (from orchestrated workflow), 2) branch-based detection
+          if [ -n "${{ inputs.environment }}" ]; then
             ENVIRONMENT="${{ inputs.environment }}"
             echo "🎯 Using injected environment from orchestrated workflow: $ENVIRONMENT"
             echo "⚡ FAST PATH: Environment was injected, skipping branch detection"
