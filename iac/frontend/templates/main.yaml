@@ -1,0 +1,163 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Main template for static website infrastructure'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: 'Name of the project'
+    
+  Environment:
+    Type: String
+    Description: 'Deployment environment'
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+    
+  TemplateBucket:
+    Type: String
+    Description: 'Bucket containing nested templates'
+    
+  ClientDomainName:
+    Type: String
+    Description: 'Domain name for the client website'
+    
+  AdminDomainName:
+    Type: String
+    Description: 'Domain name for the admin website'
+    
+  ClientCertificateArn:
+    Type: String
+    Description: 'ARN of the ACM certificate for the client domain'
+    
+  AdminCertificateArn:
+    Type: String
+    Description: 'ARN of the ACM certificate for the admin domain'
+    
+  PriceClass:
+    Type: String
+    Description: 'CloudFront price class'
+    Default: PriceClass_200
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+
+Resources:
+  # Client Application Resources
+  ClientS3Stack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3.${AWS::Region}.amazonaws.com/${ProjectName}/nested/s3.yaml
+      Parameters:
+        BucketName: !Sub "${ProjectName}-${Environment}-client"
+        Environment: !Ref Environment
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: client
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  ClientCloudFrontStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: ClientS3Stack
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3.${AWS::Region}.amazonaws.com/${ProjectName}/nested/cloudfront.yaml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        ApplicationType: client
+        BucketName: !GetAtt ClientS3Stack.Outputs.BucketName
+        DomainName: !Ref ClientDomainName
+        CertificateArn: !Ref ClientCertificateArn
+        PriceClass: !Ref PriceClass
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: client
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Admin Application Resources
+  AdminS3Stack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3.${AWS::Region}.amazonaws.com/${ProjectName}/nested/s3.yaml
+      Parameters:
+        BucketName: !Sub "${ProjectName}-${Environment}-admin"
+        Environment: !Ref Environment
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: admin
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  AdminCloudFrontStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: AdminS3Stack
+    Properties:
+      TemplateURL: !Sub https://${TemplateBucket}.s3.${AWS::Region}.amazonaws.com/${ProjectName}/nested/cloudfront.yaml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        ApplicationType: admin
+        BucketName: !GetAtt AdminS3Stack.Outputs.BucketName
+        DomainName: !Ref AdminDomainName
+        CertificateArn: !Ref AdminCertificateArn
+        PriceClass: !Ref PriceClass
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: admin
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Outputs:
+  # Client Application Outputs
+  ClientBucketName:
+    Description: 'Name of the client website bucket'
+    Value: !GetAtt ClientS3Stack.Outputs.BucketName
+    Export:
+      Name: !Sub "${AWS::StackName}-ClientBucketName"
+    
+  ClientCloudFrontDomainName:
+    Description: 'Client CloudFront distribution domain name'
+    Value: !GetAtt ClientCloudFrontStack.Outputs.DistributionDomainName
+    
+  ClientCloudFrontDistributionId:
+    Description: 'Client CloudFront distribution ID'
+    Value: !GetAtt ClientCloudFrontStack.Outputs.DistributionId
+    Export:
+      Name: !Sub "${AWS::StackName}-ClientDistributionId"
+
+  # Admin Application Outputs
+  AdminBucketName:
+    Description: 'Name of the admin website bucket'
+    Value: !GetAtt AdminS3Stack.Outputs.BucketName
+    Export:
+      Name: !Sub "${AWS::StackName}-AdminBucketName"
+    
+  AdminCloudFrontDomainName:
+    Description: 'Admin CloudFront distribution domain name'
+    Value: !GetAtt AdminCloudFrontStack.Outputs.DistributionDomainName
+    
+  AdminCloudFrontDistributionId:
+    Description: 'Admin CloudFront distribution ID'
+    Value: !GetAtt AdminCloudFrontStack.Outputs.DistributionId
+    Export:
+      Name: !Sub "${AWS::StackName}-AdminDistributionId"

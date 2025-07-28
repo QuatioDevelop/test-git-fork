@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S3 Static Website Test - Home</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .success-message {
+            color: #2ecc71;
+            font-weight: bold;
+        }
+        .test-link {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .test-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>S3 Static Website Test</h1>
+        <p class="success-message">¡El sitio web estático está funcionando correctamente!</p>
+        <p>Este es un archivo de prueba para validar la configuración del bucket S3.</p>
+        <h2>Pruebas de funcionalidad:</h2>
+        <ul>
+            <li>Acceso público al contenido ✓</li>
+            <li>Configuración de website estático ✓</li>
+            <li>Carga de index.html ✓</li>
+        </ul>
+        <p>Prueba el manejo de errores haciendo clic <a href="/ruta-no-existente" class="test-link">aquí</a></p>
+    </div>
+</body>
+</html>

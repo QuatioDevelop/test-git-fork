@@ -1,0 +1,201 @@
+name: 🚀 Orchestrated Deploy
+
+run-name: 🚀 Orchestrated Deploy to ${{ (github.ref == 'refs/heads/main' && 'dev') || (github.ref == 'refs/heads/staging' && 'staging') || (github.ref == 'refs/heads/production' && 'prod') || 'unknown' }} - ${{ github.ref_name }}
+
+on:
+  push:
+    branches: [main, staging, production]
+    paths:
+      - 'apps/**'
+      - 'iac/backend/**'
+      - 'package.json'
+      - 'turbo.json'
+  workflow_dispatch:
+    inputs:
+      force_backend:
+        description: 'Force backend deployment even without changes'
+        required: false
+        default: false
+        type: boolean
+      force_frontend:
+        description: 'Force frontend deployment even without changes'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend-changed: ${{ steps.filter.outputs.backend }}
+      frontend-changed: ${{ steps.filter.outputs.frontend }}
+      should_test: ${{ steps.filter.outputs.has_changes }}
+      environment: ${{ steps.env.outputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history to ensure merge base is available
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/staging" ]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/production" ]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Detect file changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          base: ${{ github.event.before }}
+          filters: |
+            backend:
+              - 'iac/backend/**'
+            frontend:
+              - 'apps/**'
+              - 'package.json'
+              - 'turbo.json'
+            has_changes:
+              - 'iac/backend/**'
+              - 'apps/**'
+              - 'package.json'
+              - 'turbo.json'
+
+      - name: Show detected changes
+        run: |
+          echo "🔍 Change Detection Results:"
+          echo "Environment: ${{ steps.env.outputs.environment }}"
+          echo "Backend changed: ${{ steps.filter.outputs.backend }}"
+          echo "Frontend changed: ${{ steps.filter.outputs.frontend }}"
+          echo "Has changes: ${{ steps.filter.outputs.has_changes }}"
+          echo "Force backend: ${{ github.event.inputs.force_backend }}"
+          echo "Force frontend: ${{ github.event.inputs.force_frontend }}"
+
+  deploy-backend:
+    needs: detect-changes
+    # Backend deployment only in staging/production (skip in main/dev)
+    if: (needs.detect-changes.outputs.backend-changed == 'true' || github.event.inputs.force_backend == 'true') && (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/production')
+    uses: ./.github/workflows/backend-deploy.yml
+    with:
+      environment: ${{ needs.detect-changes.outputs.environment }}
+    secrets: inherit
+
+  pre-deploy-testing:
+    needs: [detect-changes, deploy-backend]
+    # Run tests if frontend changed (after backend deployment if applicable)
+    if: always() && (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true')
+    uses: ./.github/workflows/pre-deploy-testing.yml
+    with:
+      environment: ${{ needs.detect-changes.outputs.environment }}
+    secrets: inherit
+
+  debug-deploy-conditions:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, pre-deploy-testing]
+    if: always()
+    steps:
+      - name: Debug deployment conditions
+        run: |
+          echo "=== Debugging Deploy Frontend Conditions ==="
+          echo "Frontend changed: '${{ needs.detect-changes.outputs.frontend-changed }}'"
+          echo "Force frontend: '${{ github.event.inputs.force_frontend }}'"
+          echo "Pre-deploy result: '${{ needs.pre-deploy-testing.result }}'"
+          echo "Pre-deploy conclusion: '${{ needs.pre-deploy-testing.conclusion }}'"
+          echo "Detect-changes result: '${{ needs.detect-changes.result }}'"
+          echo ""
+          echo "=== Condition Evaluation ==="
+          echo "Frontend condition: ${{ (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') }}"
+          echo "Pre-deploy result condition: ${{ needs.pre-deploy-testing.result == 'success' }}"
+          echo "Pre-deploy conclusion condition: ${{ needs.pre-deploy-testing.conclusion == 'success' }}"
+          echo "ACTUAL DEPLOY CONDITION: ${{ (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') && needs.pre-deploy-testing.result == 'success' }}"
+          echo "Final condition: always() && (frontend-changed || force_frontend) && result success ONLY"
+          echo ""
+          echo "=== Detailed Condition Breakdown ==="
+          echo "always() evaluation: true (job is running)"
+          echo "Frontend changed evaluation: ${{ needs.detect-changes.outputs.frontend-changed == 'true' }}"
+          echo "Force frontend evaluation: ${{ github.event.inputs.force_frontend == 'true' }}"
+          echo "Frontend OR force evaluation: ${{ needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true' }}"
+          echo "Result success evaluation: ${{ needs.pre-deploy-testing.result == 'success' }}"
+          echo "Conclusion success evaluation: ${{ needs.pre-deploy-testing.conclusion == 'success' }}"
+          echo "FINAL EVALUATION (EXACT): ${{ (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') && needs.pre-deploy-testing.result == 'success' }}"
+
+  deploy-frontend:
+    needs: [detect-changes, pre-deploy-testing]
+    # Deploy frontend if changed and tests passed
+    if: ${{ always() && (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') && needs.pre-deploy-testing.result == 'success' }}
+    uses: ./.github/workflows/frontend-deploy.yml
+    with:
+      environment: ${{ needs.detect-changes.outputs.environment }}
+    secrets: inherit
+
+  post-deploy-e2e:
+    needs: [detect-changes, deploy-backend, deploy-frontend]
+    # Run E2E tests after successful deployments (main only if frontend deployed successfully)
+    if: always() && ((github.ref == 'refs/heads/main' && needs.deploy-frontend.result == 'success') || ((github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/production') && (needs.deploy-frontend.result == 'success' || needs.deploy-backend.result == 'success')))
+    uses: ./.github/workflows/post-deploy-e2e.yml
+    with:
+      environment: ${{ needs.detect-changes.outputs.environment }}
+    secrets: inherit
+
+  deployment-summary:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, deploy-backend, pre-deploy-testing, deploy-frontend, post-deploy-e2e]
+    if: always()
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "## 🚀 Orchestrated Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ needs.detect-changes.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Changes Detected | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|------------------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Backend status
+          backend_changes="${{ needs.detect-changes.outputs.backend-changed }}"
+          backend_status="${{ needs.deploy-backend.result }}"
+          if [ "$backend_changes" = "true" ] && [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "| 🔧 Backend | ✅ Yes | $backend_status |" >> $GITHUB_STEP_SUMMARY
+          elif [ "$backend_changes" = "true" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "| 🔧 Backend | ✅ Yes (skipped in dev) | skipped |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 🔧 Backend | ❌ No | skipped |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Frontend status
+          frontend_changes="${{ needs.detect-changes.outputs.frontend-changed }}"
+          pre_deploy_status="${{ needs.pre-deploy-testing.result }}"
+          frontend_status="${{ needs.deploy-frontend.result }}"
+          
+          if [ "$frontend_changes" = "true" ]; then
+            echo "| 🧪 Pre-Deploy Tests | ✅ Yes | $pre_deploy_status |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🌐 Frontend | ✅ Yes | $frontend_status |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 🧪 Pre-Deploy Tests | ❌ No | skipped |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🌐 Frontend | ❌ No | skipped |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # E2E status
+          e2e_status="${{ needs.post-deploy-e2e.result }}"
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "| 🔍 E2E Tests | ✅ Enabled | $e2e_status |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 🔍 E2E Tests | ❌ Disabled (dev) | skipped |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Flow:** detect-changes → deploy-backend* → pre-deploy-testing** → deploy-frontend** → post-deploy-e2e*" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "*Only in staging/production" >> $GITHUB_STEP_SUMMARY
+          echo "**Only if frontend changed" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,24 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "esenciafest-2025-backend-dev"
+s3_bucket = "quatio-cf-templates-us-east-1" 
+s3_prefix = "esenciafest-2025/backend/dev"
+region = "us-east-1"
+confirm_changeset = false
+disable_rollback = false
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+image_repositories = []
+parameter_overrides = [
+    "ProjectName=esenciafest-2025",
+    "Environment=dev",
+    "ApiCertificateArn=arn:aws:acm:us-east-1:079827849938:certificate/fb582c8f-6580-43f4-b53a-13f3dc6d31c6",
+    "AssetsCertificateArn=arn:aws:acm:us-east-1:079827849938:certificate/5a055a5c-dc34-40d1-bcc0-8540109670a9",
+    "CorsOrigins=https://dev.esenciafest.com,https://admin.dev.esenciafest.com,http://localhost:3000,http://localhost:3001,http://localhost:3002",
+    "E2ETestSecret=e2e-test-secret-2025"
+]
+
+[default.deploy.tags]
+Project = "esenciafest-2025"
+Environment = "Development"
+ManagedBy = "SAM"

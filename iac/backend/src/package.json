@@ -1,0 +1,22 @@
+{
+  "name": "esenciafest-backend",
+  "version": "1.0.0",
+  "description": "SURA Esencia Fest 2025 Backend Functions",
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "jsonwebtoken": "^9.0.2",
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/s3-request-presigner": "^3.0.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4",
+    "aws-sdk-client-mock": "^4.1.0"
+  }
+}

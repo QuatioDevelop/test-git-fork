@@ -1,0 +1,676 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'SURA Esencia Fest 2025 - Backend Infrastructure'
+# Fixed IAM policy pattern to allow all esenciafest-2025-* roles (Issue #89)
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: esenciafest-2025
+    Description: Project name for resource naming
+  
+  Environment:
+    Type: String
+    AllowedValues: [dev, staging, prod]
+    Description: Environment for deployment
+  
+  ApiCertificateArn:
+    Type: String
+    Description: SSL Certificate ARN for API custom domain
+  
+  CorsOrigins:
+    Type: String
+    Description: Comma-separated list of allowed CORS origins
+    Default: "https://esenciafest.com,https://admin.esenciafest.com"
+  
+  AssetsCertificateArn:
+    Type: String
+    Description: ARN of the ACM certificate for assets CDN custom domain
+    Default: ""
+  
+  E2ETestSecret:
+    Type: String
+    Description: Secret key for E2E test authentication
+    Default: "e2e-test-secret-2025"
+    NoEcho: true
+  
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: nodejs18.x
+    Environment:
+      Variables:
+        MAIN_TABLE_NAME: !Ref MainTable
+        LOGS_TABLE_NAME: !Ref LogsTable
+        ENVIRONMENT: !Ref Environment
+        CORS_ORIGINS: !Ref CorsOrigins
+        E2E_TEST_SECRET: !Ref E2ETestSecret
+
+Resources:
+  # DynamoDB Main Table - Single Table Design
+  MainTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-main-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # DynamoDB Activity Logs Table
+  LogsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-logs-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # S3 Assets Bucket for CDN
+  AssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-assets-${Environment}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST, DELETE, HEAD]
+            AllowedOrigins: !Split [',', !Ref CorsOrigins]
+            ExposedHeaders: [ETag]
+            MaxAge: 3000
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # S3 Bucket Policy for CloudFront Access
+  AssetsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AssetsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipal
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub 'arn:aws:s3:::${AssetsBucket}/*'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${AssetsCloudFront}'
+
+  # CloudFront Origin Access Control
+  AssetsOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${ProjectName}-assets-oac-${Environment}'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # CloudFront Distribution for Assets CDN
+  AssetsCloudFront:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub '${ProjectName} Assets CDN - ${Environment}'
+        Aliases:
+          !If
+            - HasAssetsCertificate
+            - !If
+              - IsProd
+              - [assets.esenciafest.com]
+              - [!Sub 'assets.${Environment}.esenciafest.com']
+            - !Ref AWS::NoValue
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # CachingDisabled for dynamic content
+          OriginRequestPolicyId: 59781a5b-3903-41f3-afcb-af62929ccde1 # CORS-S3Origin
+          Compress: true
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD, OPTIONS]
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt AssetsBucket.RegionalDomainName
+            OriginAccessControlId: !Ref AssetsOriginAccessControl
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        Enabled: true
+        HttpVersion: http2
+        PriceClass: !If
+          - IsProd
+          - PriceClass_All
+          - PriceClass_100
+        ViewerCertificate:
+          !If
+            - HasAssetsCertificate
+            - AcmCertificateArn: !Ref AssetsCertificateArn
+              SslSupportMethod: sni-only
+              MinimumProtocolVersion: TLSv1.2_2021
+            - CloudFrontDefaultCertificate: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub '${ProjectName}-api-${Environment}'
+      StageName: !Ref Environment
+      Domain:
+        DomainName: !If
+          - IsProd
+          - api.esenciafest.com
+          - !Sub 'api.${Environment}.esenciafest.com'
+        CertificateArn: !Ref ApiCertificateArn
+        EndpointConfiguration: REGIONAL
+      Tags:
+        Project: !Ref ProjectName
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+
+  # Basic Health Check Lambda
+  HealthCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-health-${Environment}'
+      CodeUri: src/
+      Handler: health.handler
+      Events:
+        HealthCheck:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /health
+            Method: GET
+      Tags:
+        Project: !Ref ProjectName
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+
+  # Auth Lambda Function
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-auth-${Environment}'
+      CodeUri: src/
+      Handler: auth.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MainTable
+      Events:
+        AuthPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /auth
+            Method: POST
+        AuthOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /auth
+            Method: OPTIONS
+      Tags:
+        Project: !Ref ProjectName
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+
+  # Rooms Status Lambda Function
+  RoomsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-rooms-${Environment}'
+      CodeUri: src/
+      Handler: rooms.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MainTable
+      Events:
+        RoomsGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /rooms/status
+            Method: GET
+        RoomsOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /rooms/status
+            Method: OPTIONS
+      Tags:
+        Project: !Ref ProjectName
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+
+  # User Progress Lambda Function
+  UserProgressFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-user-progress-${Environment}'
+      CodeUri: src/
+      Handler: user-progress.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MainTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref LogsTable
+      Events:
+        UserProgressGet:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /user/progress
+            Method: GET
+        UserProgressPut:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /user/progress/{salaId}
+            Method: PUT
+        UserProgressOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /user/progress
+            Method: OPTIONS
+        UserProgressIdOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /user/progress/{salaId}
+            Method: OPTIONS
+      Tags:
+        Project: !Ref ProjectName
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+
+  # User Delete Lambda Function
+  UserDeleteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-user-delete-${Environment}'
+      CodeUri: src/
+      Handler: user-delete.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MainTable
+      Events:
+        UserDelete:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /user/delete
+            Method: DELETE
+        UserDeleteOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /user/delete
+            Method: OPTIONS
+      Tags:
+        Project: !Ref ProjectName
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+
+  # Presigned URLs Lambda Function
+  PresignedUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-presigned-url-${Environment}'
+      CodeUri: src/
+      Handler: presigned-urls.handler
+      Environment:
+        Variables:
+          ASSETS_BUCKET_NAME: !Ref AssetsBucket
+          CLOUDFRONT_DOMAIN: !GetAtt AssetsCloudFront.DomainName
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref AssetsBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:PutObjectAcl
+              Resource: !Sub 'arn:aws:s3:::${AssetsBucket}/*'
+      Events:
+        PresignedUrlPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /uploads/presigned-url
+            Method: POST
+        PresignedUrlOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /uploads/presigned-url
+            Method: OPTIONS
+      Tags:
+        Project: !Ref ProjectName
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+
+  # Cognito User Pool for Admin Authentication
+  AdminUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub '${ProjectName}-admin-${Environment}'
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      UsernameAttributes:
+        - email
+      UserAttributeUpdateSettings:
+        AttributesRequireVerificationBeforeUpdate:
+          - email
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+
+  # Cognito User Pool Client for Admin App
+  AdminUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub '${ProjectName}-admin-client-${Environment}'
+      UserPoolId: !Ref AdminUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      RefreshTokenValidity: 30
+      PreventUserExistenceErrors: ENABLED
+
+  # Cognito Identity Pool for AWS Resource Access
+  AdminIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub '${ProjectName}_admin_${Environment}'
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref AdminUserPoolClient
+          ProviderName: !GetAtt AdminUserPool.ProviderName
+
+  # IAM Role for Authenticated Admin Users
+  AdminAuthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-admin-auth-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                'cognito-identity.amazonaws.com:aud': !Ref AdminIdentityPool
+              'ForAnyValue:StringLike':
+                'cognito-identity.amazonaws.com:amr': authenticated
+      Policies:
+        - PolicyName: AdminBasicPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-identity:GetCredentialsForIdentity
+                  - cognito-identity:GetId
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-*'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Attach Roles to Identity Pool
+  AdminIdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref AdminIdentityPool
+      Roles:
+        authenticated: !GetAtt AdminAuthenticatedRole.Arn
+
+  # Admin Rooms Lambda Function
+  AdminRoomsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-admin-rooms-${Environment}'
+      CodeUri: src/
+      Handler: admin-rooms.handler
+      Environment:
+        Variables:
+          ADMIN_USER_POOL_ID: !Ref AdminUserPool
+          ADMIN_USER_POOL_CLIENT_ID: !Ref AdminUserPoolClient
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MainTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:GetUser
+                - cognito-idp:AdminGetUser
+              Resource: !GetAtt AdminUserPool.Arn
+      Events:
+        AdminRoomsOverride:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /admin/rooms/{roomId}/override
+            Method: PUT
+        AdminRoomsOverrideOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /admin/rooms/{roomId}/override
+            Method: OPTIONS
+        AdminRoomsSchedule:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /admin/rooms/{roomId}/schedule
+            Method: PUT
+        AdminRoomsScheduleOptions:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /admin/rooms/{roomId}/schedule
+            Method: OPTIONS
+      Tags:
+        Project: !Ref ProjectName
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+  HasAssetsCertificate: !Not [!Equals [!Ref AssetsCertificateArn, ""]]
+
+Outputs:
+  ApiGatewayUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${ProjectName}-api-url-${Environment}'
+  
+  CloudFrontDomain:
+    Description: CloudFront distribution domain name
+    Value: !GetAtt AssetsCloudFront.DomainName
+    Export:
+      Name: !Sub '${ProjectName}-cloudfront-domain-${Environment}'
+  
+  AssetsBucketName:
+    Description: Name of the S3 bucket for assets
+    Value: !Ref AssetsBucket
+    Export:
+      Name: !Sub '${ProjectName}-assets-bucket-${Environment}'
+      
+  CustomDomainUrl:
+    Description: Custom domain URL for API
+    Value: !If
+      - IsProd
+      - 'https://api.esenciafest.com'
+      - !Sub 'https://api.${Environment}.esenciafest.com'
+    Export:
+      Name: !Sub '${ProjectName}-custom-api-url-${Environment}'
+      
+  DomainTarget:
+    Description: Target domain for CNAME record in Cloudflare
+    Value: !Sub '${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com'
+    Export:
+      Name: !Sub '${ProjectName}-domain-target-${Environment}'
+  
+  MainTableName:
+    Description: Main DynamoDB table name
+    Value: !Ref MainTable
+    Export:
+      Name: !Sub '${ProjectName}-main-table-${Environment}'
+  
+  LogsTableName:
+    Description: Logs DynamoDB table name  
+    Value: !Ref LogsTable
+    Export:
+      Name: !Sub '${ProjectName}-logs-table-${Environment}'
+  
+  AdminUserPoolId:
+    Description: Admin Cognito User Pool ID
+    Value: !Ref AdminUserPool
+    Export:
+      Name: !Sub '${ProjectName}-admin-user-pool-id-${Environment}'
+  
+  AdminUserPoolClientId:
+    Description: Admin Cognito User Pool Client ID
+    Value: !Ref AdminUserPoolClient
+    Export:
+      Name: !Sub '${ProjectName}-admin-user-pool-client-id-${Environment}'
+  
+  AdminIdentityPoolId:
+    Description: Admin Cognito Identity Pool ID
+    Value: !Ref AdminIdentityPool
+    Export:
+      Name: !Sub '${ProjectName}-admin-identity-pool-id-${Environment}'
+  
+  AssetsBucketName:
+    Description: S3 Assets Bucket Name
+    Value: !Ref AssetsBucket
+    Export:
+      Name: !Sub '${ProjectName}-assets-bucket-${Environment}'
+  
+  AssetsCloudFrontDomain:
+    Description: CloudFront Distribution Domain for Assets
+    Value: !GetAtt AssetsCloudFront.DomainName
+    Export:
+      Name: !Sub '${ProjectName}-assets-cloudfront-domain-${Environment}'
+  
+  AssetsCloudFrontUrl:
+    Description: Assets CDN URL
+    Value: !Sub 'https://${AssetsCloudFront.DomainName}'
+    Export:
+      Name: !Sub '${ProjectName}-assets-url-${Environment}'
+  
+  PresignedUrlEndpoint:
+    Description: Presigned URL endpoint for uploads
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/uploads/presigned-url'
+    Export:
+      Name: !Sub '${ProjectName}-presigned-url-endpoint-${Environment}'

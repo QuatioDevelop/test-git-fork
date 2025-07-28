@@ -1,0 +1,17 @@
+{
+    "Parameters": {
+        "ProjectName": "esenciafest-2025",
+        "Environment": "staging",
+        "TemplateBucket": "quatio-cf-templates-us-east-1",
+        "ClientDomainName": "staging.esenciafest.com",
+        "AdminDomainName": "admin.staging.esenciafest.com",
+        "ClientCertificateArn": "arn:aws:acm:us-east-1:079827849938:certificate/2f6b8c50-4a45-4beb-81d2-8edac0f6a7dd",
+        "AdminCertificateArn": "arn:aws:acm:us-east-1:079827849938:certificate/a3fa8ea5-2722-4224-93f0-b823227862cf",
+        "PriceClass": "PriceClass_200"
+    },
+    "Tags": {
+        "Project": "esenciafest-2025",
+        "Environment": "Staging",
+        "ManagedBy": "CloudFormation"
+    }
+}

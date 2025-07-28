@@ -1,0 +1,43 @@
+# AWS CloudFormation temporary files
+*.swp
+*~.nfs*
+*.cfn.yaml
+temp_params_*.json
+
+# IDE/Editor specific
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Node modules (if we add any scripts later)
+node_modules/
+
+# Local environment files
+.env
+.env.local
+*.pem
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.swo
+markers.json
+versions.json
+to-delete.json
+
+# AWS SAM
+.aws-sam/
+
+# Python (if we add any Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/

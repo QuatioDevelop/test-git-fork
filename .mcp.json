@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "Figma MCP Server": {
+      "command": "npx",
+      "args": ["-y", "figma-developer-mcp", "--stdio"],
+      "env": {
+        "FIGMA_API_KEY": "${FIGMA_API_KEY}",
+        "FIGMA_FILE_KEY": "${FIGMA_FILE_KEY}",
+        "FIGMA_NODE_ID": "${FIGMA_NODE_ID}",
+        "OUTPUT_FORMAT": "json"
+      }
+    }
+  }
+}

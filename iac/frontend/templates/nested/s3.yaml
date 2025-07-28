@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'S3 configuration for static website hosting'
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: 'Name of the S3 bucket to create'
+    
+  Environment:
+    Type: String
+    Description: 'Environment name'
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+
+Resources:
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub "${BucketName}-logs"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: S3AccessLogs
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  LoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LoggingBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${LoggingBucket}/*"
+          - Sid: AWSLogDeliveryCheck
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+            Resource: !Sub "arn:aws:s3:::${LoggingBucket}"
+
+  StaticSiteBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: LoggingBucketPolicy
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Ref BucketName
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: !Sub "access-logs/"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: StaticWebsiteHosting
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StaticSiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${StaticSiteBucket}/*"
+
+Outputs:
+  BucketName:
+    Description: 'Name of the static website bucket'
+    Value: !Ref StaticSiteBucket
+    
+  BucketArn:
+    Description: 'ARN of the bucket'
+    Value: !GetAtt StaticSiteBucket.Arn
+    
+  BucketRegionalDomainName:
+    Description: 'Regional domain name of the bucket'
+    Value: !GetAtt StaticSiteBucket.RegionalDomainName
+    
+  WebsiteURL:
+    Description: 'URL of the static website'
+    Value: !GetAtt StaticSiteBucket.WebsiteURL
+    
+  LoggingBucketName:
+    Description: 'Name of the logging bucket'
+    Value: !Ref LoggingBucket

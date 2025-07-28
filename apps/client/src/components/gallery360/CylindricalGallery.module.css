@@ -1,0 +1,389 @@
+/* Cylindrical Gallery - CSS 3D Transforms Implementation - DeSandro approach */
+
+.cylindricalGallery {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  background: linear-gradient(180deg, #f5f5f5 0%, #e8e8e8 100%);
+  border-radius: 0;
+}
+
+/* Scene container - DeSandro's .scene equivalent */
+.scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  perspective: 1000px;
+  perspective-origin: 50% 50%;
+}
+
+/* Add fade effect at edges */
+.cylindricalGallery::before,
+.cylindricalGallery::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 150px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.cylindricalGallery::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(245, 245, 245, 1) 0%, rgba(245, 245, 245, 0) 100%);
+}
+
+.cylindricalGallery::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(245, 245, 245, 1) 0%, rgba(245, 245, 245, 0) 100%);
+}
+
+.cylindricalGallery:active {
+  cursor: grabbing;
+}
+
+/* Carousel container - DeSandro's .carousel equivalent */
+.galleryContainer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 1s;
+  will-change: transform;
+}
+
+.galleryContainer.dragging {
+  transition: none;
+}
+
+/* Gallery frame - DeSandro's .carousel__cell equivalent */
+.galleryFrame {
+  position: absolute;
+  width: 160px;
+  height: 220px;
+  left: calc(50% - 80px);
+  top: calc(50% - 110px);
+  background: #fff;
+  border: 6px solid #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  overflow: visible;
+  transition: transform 1s, opacity 1s;
+  opacity: 1;
+}
+
+.galleryFrame:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  transform: scale(1.02);
+}
+
+.frameImage {
+  position: relative;
+  width: 100%;
+  height: 85%;
+  object-fit: cover;
+  border-radius: 0;
+  background: #1e4d8b;
+}
+
+.frameContent {
+  padding: 4px 8px;
+  height: 15%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #fff;
+  text-align: center;
+}
+
+.frameTitle {
+  font-size: 10px;
+  font-weight: 500;
+  color: #333;
+  margin: 0;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.frameDescription {
+  font-size: 9px;
+  color: #666;
+  margin: 0;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.galleryHotspot {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: #ffd700;
+  border: 2px solid #ffcc00;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  color: #333;
+  transition: all 0.3s ease;
+  z-index: 10;
+  bottom: 8px;
+  right: 8px;
+}
+
+.galleryHotspot:hover {
+  background: #ffcc00;
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(255, 204, 0, 0.4);
+}
+
+.navigationControls {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  z-index: 20;
+}
+
+.navButton {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.navButton:hover {
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-2px);
+}
+
+.navButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.centerInstruction {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.centerInstruction p {
+  font-size: 16px;
+  color: #333;
+  margin: 0;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 8px 16px;
+  border-radius: 20px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.frameCounter {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  color: #666;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Frame Control */
+.frameControl {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 20;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 12px 16px;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.frameControlLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  color: #333;
+  font-weight: 500;
+}
+
+.frameControlSlider {
+  width: 120px;
+  height: 4px;
+  background: #e5e5e5;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+}
+
+.frameControlSlider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #1e4d8b;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.frameControlSlider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #1e4d8b;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Descriptive Text Section */
+.descriptiveText {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 15;
+  pointer-events: none;
+  max-width: 600px;
+  padding: 0 20px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: bold;
+  color: #1e4d8b;
+  margin: 0 0 8px 0;
+  text-shadow: 1px 1px 3px rgba(255, 255, 255, 0.8);
+}
+
+.subtitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #d97706;
+  margin: 0 0 12px 0;
+  text-shadow: 1px 1px 3px rgba(255, 255, 255, 0.8);
+}
+
+.description {
+  font-size: 14px;
+  color: #374151;
+  margin: 0;
+  line-height: 1.6;
+  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.loadingSpinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top: 3px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Responsive Design - Scale approach */
+@media (max-width: 768px) {
+  .scene {
+    transform: scale(0.8);
+    transform-origin: center center;
+  }
+  
+  .navButton {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  .title {
+    font-size: 24px;
+  }
+  
+  .subtitle {
+    font-size: 18px;
+  }
+  
+  .description {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .scene {
+    transform: scale(0.6);
+    transform-origin: center center;
+  }
+  
+  .navButton {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+  
+  .title {
+    font-size: 20px;
+  }
+  
+  .subtitle {
+    font-size: 16px;
+  }
+  
+  .description {
+    font-size: 12px;
+  }
+}
+
+/* Accessibility - Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .galleryContainer {
+    transition: none;
+  }
+  
+  .galleryFrame {
+    transition: none;
+  }
+  
+  .navButton {
+    transition: none;
+  }
+  
+  .galleryHotspot {
+    transition: none;
+  }
+}

@@ -1,0 +1,24 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "esenciafest-2025-backend-staging"
+s3_bucket = "quatio-cf-templates-us-east-1"
+s3_prefix = "esenciafest-2025/backend/staging"
+region = "us-east-1"
+confirm_changeset = false
+disable_rollback = false
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+image_repositories = []
+parameter_overrides = [
+    "ProjectName=esenciafest-2025",
+    "Environment=staging",
+    "ApiCertificateArn=arn:aws:acm:us-east-1:079827849938:certificate/bdd9e2ce-3f96-4c49-80d3-647613e08201",
+    "AssetsCertificateArn=arn:aws:acm:us-east-1:079827849938:certificate/b313af70-f6b0-4a02-bb92-04db250fb935",
+    "CorsOrigins=https://staging.esenciafest.com,https://admin.staging.esenciafest.com",
+    "E2ETestSecret=e2e-test-secret-2025"
+]
+
+[default.deploy.tags]
+Project = "esenciafest-2025"
+Environment = "Staging"
+ManagedBy = "SAM"
