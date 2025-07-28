@@ -52,6 +52,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: pre-deploy-testing.yml
+          workflow_conclusion: success
           name: build-artifacts-${{ github.sha }}
           commit: ${{ github.sha }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -61,12 +62,24 @@ jobs:
       - name: Check if artifacts were downloaded from testing
         id: check-testing-artifacts
         run: |
+          echo "=== Debugging artifact download ==="
+          echo "🔍 Current SHA: ${{ github.sha }}"
+          echo "🔍 Looking for artifact: build-artifacts-${{ github.sha }}"
+          echo "🔍 Download step outcome: ${{ steps.download-from-testing.outcome }}"
+          echo "🔍 Download step conclusion: ${{ steps.download-from-testing.conclusion }}"
+          
           if [ -d "./artifacts" ] && [ "$(ls -A ./artifacts)" ]; then
             echo "found=true" >> $GITHUB_OUTPUT
             echo "✅ Artifacts found from pre-deploy-testing"
+            echo "📁 Contents:"
+            find ./artifacts -type f | head -10
           else
             echo "found=false" >> $GITHUB_OUTPUT
-            echo "❌ No artifacts from pre-deploy-testing, will use build artifacts"
+            echo "❌ No artifacts from pre-deploy-testing"
+            echo "📁 Current directory contents:"
+            ls -la . || echo "No files"
+            echo "📁 Artifacts directory check:"
+            [ -d "./artifacts" ] && echo "Directory exists but empty" || echo "Directory does not exist"
           fi
 
       - name: Restore directory structure from testing artifacts
