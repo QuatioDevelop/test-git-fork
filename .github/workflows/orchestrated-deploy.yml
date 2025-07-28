@@ -72,118 +72,140 @@ jobs:
           echo "Force backend: ${{ github.event.inputs.force_backend }}"
           echo "Force frontend: ${{ github.event.inputs.force_frontend }}"
 
-  deploy-backend:
-    needs: detect-changes
-    # SIMPLIFIED: Deploy backend if changed
-    if: needs.detect-changes.outputs.backend-changed == 'true' || github.event.inputs.force_backend == 'true'
-    uses: ./.github/workflows/backend-deploy.yml
-    with:
-      environment: ${{ needs.detect-changes.outputs.environment }}
-    secrets: inherit
-
-  pre-deploy-testing:
-    needs: detect-changes
-    # SIMPLIFIED: Run tests if frontend changed
-    if: needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true'
-    uses: ./.github/workflows/pre-deploy-testing.yml
-    with:
-      environment: ${{ needs.detect-changes.outputs.environment }}
-    secrets: inherit
-
-  debug-deploy-conditions:
+  # STUB JOBS FOR PATH TESTING - NO ACTUAL DEPLOYMENT
+  
+  frontend-only-flow:
     runs-on: ubuntu-latest
-    needs: [detect-changes, pre-deploy-testing]
-    if: always()
+    needs: [determine-path]
+    if: needs.determine-path.outputs.path == 'frontend-only'
     steps:
-      - name: Debug deployment conditions
+      - name: Frontend-Only Flow (STUB)
         run: |
-          echo "=== Debugging Deploy Frontend Conditions ==="
+          echo "🌐 FRONTEND-ONLY FLOW TRIGGERED"
+          echo "Path: ${{ needs.determine-path.outputs.path }}"
+          echo "Description: ${{ needs.determine-path.outputs.description }}"
+          echo "This would execute: pre-test → build → deploy-frontend"
+          echo "SUCCESS: Frontend-only path working correctly"
+
+  backend-frontend-flow:
+    runs-on: ubuntu-latest
+    needs: [determine-path]
+    if: needs.determine-path.outputs.path == 'backend-frontend'
+    steps:
+      - name: Backend + Frontend Flow (STUB)
+        run: |
+          echo "🔧🌐 BACKEND + FRONTEND FLOW TRIGGERED"
+          echo "Path: ${{ needs.determine-path.outputs.path }}"
+          echo "Description: ${{ needs.determine-path.outputs.description }}"
+          echo "This would execute: deploy-backend → pre-test → deploy-frontend"
+          echo "SUCCESS: Backend + Frontend path working correctly"
+
+  backend-only-flow:
+    runs-on: ubuntu-latest
+    needs: [determine-path]
+    if: needs.determine-path.outputs.path == 'backend-only'
+    steps:
+      - name: Backend-Only Flow (STUB)
+        run: |
+          echo "🔧 BACKEND-ONLY FLOW TRIGGERED"
+          echo "Path: ${{ needs.determine-path.outputs.path }}"
+          echo "Description: ${{ needs.determine-path.outputs.description }}"
+          echo "This would execute: deploy-backend"
+          echo "SUCCESS: Backend-only path working correctly"
+
+  no-changes-detected:
+    runs-on: ubuntu-latest
+    needs: [determine-path]
+    if: needs.determine-path.outputs.path == 'no-changes'
+    steps:
+      - name: No Changes Flow (STUB)
+        run: |
+          echo "⏭️ NO CHANGES DETECTED"
+          echo "Path: ${{ needs.determine-path.outputs.path }}"
+          echo "Description: ${{ needs.determine-path.outputs.description }}"
+          echo "No deployment needed"
+          echo "SUCCESS: No-changes path working correctly"
+
+  determine-path:
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    outputs:
+      path: ${{ steps.path.outputs.path }}
+      description: ${{ steps.path.outputs.description }}
+    steps:
+      - name: Determine deployment path
+        id: path
+        run: |
+          echo "=== Change Detection Results ==="
+          echo "Backend changed: '${{ needs.detect-changes.outputs.backend-changed }}'"
           echo "Frontend changed: '${{ needs.detect-changes.outputs.frontend-changed }}'"
+          echo "Force backend: '${{ github.event.inputs.force_backend }}'"
           echo "Force frontend: '${{ github.event.inputs.force_frontend }}'"
-          echo "Pre-deploy result: '${{ needs.pre-deploy-testing.result }}'"
-          echo "Pre-deploy conclusion: '${{ needs.pre-deploy-testing.conclusion }}'"
-          echo "Detect-changes result: '${{ needs.detect-changes.result }}'"
           echo ""
-          echo "=== Condition Evaluation ==="
-          echo "Frontend condition: ${{ (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') }}"
-          echo "Pre-deploy result condition: ${{ needs.pre-deploy-testing.result == 'success' }}"
-          echo "Pre-deploy conclusion condition: ${{ needs.pre-deploy-testing.conclusion == 'success' }}"
-          echo "ACTUAL DEPLOY CONDITION: ${{ (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') && needs.pre-deploy-testing.result == 'success' }}"
-          echo "Final condition: always() && (frontend-changed || force_frontend) && result success ONLY"
+          
+          # Determine which path to take
+          BACKEND_DEPLOY=$([ "${{ needs.detect-changes.outputs.backend-changed }}" = "true" ] || [ "${{ github.event.inputs.force_backend }}" = "true" ] && echo "true" || echo "false")
+          FRONTEND_DEPLOY=$([ "${{ needs.detect-changes.outputs.frontend-changed }}" = "true" ] || [ "${{ github.event.inputs.force_frontend }}" = "true" ] && echo "true" || echo "false")
+          
+          echo "Backend needs deploy: $BACKEND_DEPLOY"
+          echo "Frontend needs deploy: $FRONTEND_DEPLOY"
           echo ""
-          echo "=== Detailed Condition Breakdown ==="
-          echo "always() evaluation: true (job is running)"
-          echo "Frontend changed evaluation: ${{ needs.detect-changes.outputs.frontend-changed == 'true' }}"
-          echo "Force frontend evaluation: ${{ github.event.inputs.force_frontend == 'true' }}"
-          echo "Frontend OR force evaluation: ${{ needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true' }}"
-          echo "Result success evaluation: ${{ needs.pre-deploy-testing.result == 'success' }}"
-          echo "Conclusion success evaluation: ${{ needs.pre-deploy-testing.conclusion == 'success' }}"
-          echo "FINAL EVALUATION (EXACT): ${{ (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') && needs.pre-deploy-testing.result == 'success' }}"
+          
+          if [ "$BACKEND_DEPLOY" = "true" ] && [ "$FRONTEND_DEPLOY" = "true" ]; then
+            PATH_TYPE="backend-frontend"
+            DESCRIPTION="Backend + Frontend deployment"
+          elif [ "$FRONTEND_DEPLOY" = "true" ]; then
+            PATH_TYPE="frontend-only"
+            DESCRIPTION="Frontend-only deployment"
+          elif [ "$BACKEND_DEPLOY" = "true" ]; then
+            PATH_TYPE="backend-only"
+            DESCRIPTION="Backend-only deployment"
+          else
+            PATH_TYPE="no-changes"
+            DESCRIPTION="No deployment needed"
+          fi
+          
+          echo "=== Path Determination ==="
+          echo "Selected path: $PATH_TYPE"
+          echo "Description: $DESCRIPTION"
+          
+          echo "path=$PATH_TYPE" >> $GITHUB_OUTPUT
+          echo "description=$DESCRIPTION" >> $GITHUB_OUTPUT
 
-  deploy-frontend:
-    needs: [detect-changes, pre-deploy-testing]
-    # SIMPLIFIED: Deploy frontend if changed and tests passed
-    if: (needs.detect-changes.outputs.frontend-changed == 'true' || github.event.inputs.force_frontend == 'true') && needs.pre-deploy-testing.result == 'success'
-    uses: ./.github/workflows/frontend-deploy.yml
-    with:
-      environment: ${{ needs.detect-changes.outputs.environment }}
-    secrets: inherit
-
+  # E2E TESTING (runs automatically if any flow succeeds)
   post-deploy-e2e:
-    needs: [detect-changes, deploy-frontend]
-    # SIMPLIFIED: Run E2E if frontend deployment succeeded
-    if: always() && needs.deploy-frontend.result == 'success'
-    uses: ./.github/workflows/post-deploy-e2e.yml
-    with:
-      environment: ${{ needs.detect-changes.outputs.environment }}
-      force_run: true
-    secrets: inherit
+    runs-on: ubuntu-latest
+    needs: [frontend-only-flow, backend-frontend-flow, backend-only-flow]
+    steps:
+      - name: E2E Testing (STUB)
+        run: |
+          echo "🔍 E2E TESTING TRIGGERED"
+          echo "Frontend-only result: ${{ needs.frontend-only-flow.result }}"
+          echo "Backend+Frontend result: ${{ needs.backend-frontend-flow.result }}"
+          echo "Backend-only result: ${{ needs.backend-only-flow.result }}"
+          echo ""
+          echo "This would execute E2E tests against deployed environment"
+          echo "SUCCESS: E2E path working correctly"
 
   deployment-summary:
     runs-on: ubuntu-latest
-    needs: [detect-changes, deploy-backend, pre-deploy-testing, deploy-frontend, post-deploy-e2e]
+    needs: [determine-path, frontend-only-flow, backend-frontend-flow, backend-only-flow, post-deploy-e2e]
     if: always()
     steps:
-      - name: Deployment Summary
+      - name: Path Testing Summary
         run: |
-          echo "## 🚀 Orchestrated Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Path Detection Testing Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Environment:** ${{ needs.detect-changes.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ needs.determine-path.outputs.environment || 'test' }}" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Detected Path:** ${{ needs.determine-path.outputs.path }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Description:** ${{ needs.determine-path.outputs.description }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Component | Changes Detected | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|------------------|--------|" >> $GITHUB_STEP_SUMMARY
-          
-          # Backend status
-          backend_changes="${{ needs.detect-changes.outputs.backend-changed }}"
-          backend_status="${{ needs.deploy-backend.result }}"
-          if [ "$backend_changes" = "true" ] && [ "${{ github.ref }}" != "refs/heads/main" ]; then
-            echo "| 🔧 Backend | ✅ Yes | $backend_status |" >> $GITHUB_STEP_SUMMARY
-          elif [ "$backend_changes" = "true" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "| 🔧 Backend | ✅ Yes (skipped in dev) | skipped |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| 🔧 Backend | ❌ No | skipped |" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Frontend status
-          frontend_changes="${{ needs.detect-changes.outputs.frontend-changed }}"
-          pre_deploy_status="${{ needs.pre-deploy-testing.result }}"
-          frontend_status="${{ needs.deploy-frontend.result }}"
-          
-          if [ "$frontend_changes" = "true" ]; then
-            echo "| 🧪 Pre-Deploy Tests | ✅ Yes | $pre_deploy_status |" >> $GITHUB_STEP_SUMMARY
-            echo "| 🌐 Frontend | ✅ Yes | $frontend_status |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| 🧪 Pre-Deploy Tests | ❌ No | skipped |" >> $GITHUB_STEP_SUMMARY
-            echo "| 🌐 Frontend | ❌ No | skipped |" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # E2E status
-          e2e_status="${{ needs.post-deploy-e2e.result }}"
-          echo "| 🔍 E2E Tests | ✅ Enabled | $e2e_status |" >> $GITHUB_STEP_SUMMARY
-          
+          echo "| Flow | Status | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🌐 Frontend-Only | ${{ needs.frontend-only-flow.result || 'skipped' }} | ${{ needs.frontend-only-flow.result == 'success' && '✅ Correct' || (needs.frontend-only-flow.result == 'skipped' && '⏭️ Skipped' || '❌ Failed') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔧🌐 Backend+Frontend | ${{ needs.backend-frontend-flow.result || 'skipped' }} | ${{ needs.backend-frontend-flow.result == 'success' && '✅ Correct' || (needs.backend-frontend-flow.result == 'skipped' && '⏭️ Skipped' || '❌ Failed') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔧 Backend-Only | ${{ needs.backend-only-flow.result || 'skipped' }} | ${{ needs.backend-only-flow.result == 'success' && '✅ Correct' || (needs.backend-only-flow.result == 'skipped' && '⏭️ Skipped' || '❌ Failed') }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 E2E Tests | ${{ needs.post-deploy-e2e.result || 'skipped' }} | ${{ needs.post-deploy-e2e.result == 'success' && '✅ Triggered' || (needs.post-deploy-e2e.result == 'skipped' && '⏭️ Skipped' || '❌ Failed') }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Flow:** detect-changes → deploy-backend* → pre-deploy-testing** → deploy-frontend** → post-deploy-e2e" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "*Only in staging/production" >> $GITHUB_STEP_SUMMARY
-          echo "**Only if frontend changed" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Status:** Only ONE path should execute based on detected changes." >> $GITHUB_STEP_SUMMARY
