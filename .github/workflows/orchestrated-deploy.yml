@@ -189,14 +189,10 @@ jobs:
           
           # E2E status
           e2e_status="${{ needs.post-deploy-e2e.result }}"
-          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
-            echo "| 🔍 E2E Tests | ✅ Enabled | $e2e_status |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| 🔍 E2E Tests | ❌ Disabled (dev) | skipped |" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "| 🔍 E2E Tests | ✅ Enabled | $e2e_status |" >> $GITHUB_STEP_SUMMARY
           
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Flow:** detect-changes → deploy-backend* → pre-deploy-testing** → deploy-frontend** → post-deploy-e2e*" >> $GITHUB_STEP_SUMMARY
+          echo "**Flow:** detect-changes → deploy-backend* → pre-deploy-testing** → deploy-frontend** → post-deploy-e2e" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "*Only in staging/production" >> $GITHUB_STEP_SUMMARY
           echo "**Only if frontend changed" >> $GITHUB_STEP_SUMMARY
