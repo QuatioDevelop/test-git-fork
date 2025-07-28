@@ -220,7 +220,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [determine-environment, build, download-artifacts]
     # Always depend on build and download-artifacts, even if they might be skipped
-    if: always() && needs.determine-environment.outputs.should_deploy == 'true' && (needs.download-artifacts.result == 'success' || needs.build.result == 'success' || github.event.inputs.skip_build == 'true')
+    if: ${{ always() && needs.determine-environment.outputs.should_deploy == 'true' && (needs.download-artifacts.result == 'success' || needs.build.result == 'success' || github.event.inputs.skip_build == 'true') }}
     environment: 
       name: ${{ needs.determine-environment.outputs.environment }}
       url: ${{ steps.deploy.outputs.client_url }}
@@ -321,7 +321,7 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     needs: [determine-environment, build, download-artifacts, deploy]
-    if: always() && needs.determine-environment.outputs.should_deploy == 'true'
+    if: ${{ always() && needs.determine-environment.outputs.should_deploy == 'true' }}
     steps:
       - name: Deployment notification
         run: |
