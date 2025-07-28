@@ -139,12 +139,13 @@ jobs:
     secrets: inherit
 
   post-deploy-e2e:
-    needs: [deploy-backend, deploy-frontend]
+    needs: [detect-changes, deploy-backend, deploy-frontend]
     # SIMPLIFIED: Run E2E if any deployment succeeded
     if: always() && (needs.deploy-backend.result == 'success' || needs.deploy-frontend.result == 'success')
     uses: ./.github/workflows/post-deploy-e2e.yml
     with:
       environment: ${{ needs.detect-changes.outputs.environment }}
+      force_run: true
     secrets: inherit
 
   deployment-summary:

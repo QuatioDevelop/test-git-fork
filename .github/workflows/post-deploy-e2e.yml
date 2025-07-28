@@ -10,6 +10,11 @@ on:
         description: 'Environment to test'
         required: true
         type: string
+      force_run:
+        description: 'Force E2E tests to run regardless of environment'
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       environment:
@@ -51,13 +56,17 @@ jobs:
       - name: Check if should run
         id: check
         run: |
-          # Always run for staging/production branches or manual trigger
-          if [[ "${{ github.ref }}" == "refs/heads/staging" ]] || 
+          # Run for all branches (dev, staging, production) or manual trigger, or when forced
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || 
+             [[ "${{ github.ref }}" == "refs/heads/staging" ]] || 
              [[ "${{ github.ref }}" == "refs/heads/production" ]] || 
-             [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+             [[ "${{ github.event_name }}" == "workflow_dispatch" ]] ||
+             [[ "${{ inputs.force_run }}" == "true" ]]; then
             echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "✅ E2E tests enabled for this environment/trigger"
           else
             echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "❌ E2E tests disabled for this environment/trigger"
           fi
 
   e2e-tests:
