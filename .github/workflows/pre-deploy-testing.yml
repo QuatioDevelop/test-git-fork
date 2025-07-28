@@ -19,7 +19,7 @@ jobs:
   determine-environment:
     runs-on: ubuntu-latest
     # Skip if environment was injected via workflow_call, run if standalone
-    if: ${{ github.event_name != 'workflow_call' || inputs.environment == '' }}
+    if: ${{ github.event_name != 'workflow_call' || !inputs.environment }}
     outputs:
       environment: ${{ steps.env.outputs.environment }}
     steps:
