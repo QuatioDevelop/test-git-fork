@@ -16,6 +16,9 @@ on:
       should_run_e2e:
         description: 'Whether E2E tests should run for this environment'
         value: ${{ jobs.determine.outputs.should_run_e2e }}
+      should_deploy_backend:
+        description: 'Whether backend should deploy for this environment'
+        value: ${{ jobs.determine.outputs.should_deploy_backend }}
 
 env:
   NODE_VERSION: '22'
@@ -26,6 +29,7 @@ jobs:
     outputs:
       environment: ${{ steps.env.outputs.environment }}
       should_run_e2e: ${{ steps.env.outputs.should_run_e2e }}
+      should_deploy_backend: ${{ steps.env.outputs.should_deploy_backend }}
     steps:
       - name: Determine environment and settings
         id: env
@@ -67,8 +71,20 @@ jobs:
             echo "❌ E2E tests disabled for this environment/trigger"
           fi
           
+          # Determine if backend should deploy for this environment
+          # Backend only deploys to staging and production, not dev
+          if [[ "$ENVIRONMENT" == "staging" ]] || [[ "$ENVIRONMENT" == "prod" ]]; then
+            SHOULD_DEPLOY_BACKEND="true"
+            echo "✅ Backend deployment enabled for environment: $ENVIRONMENT"
+          else
+            SHOULD_DEPLOY_BACKEND="false"
+            echo "❌ Backend deployment disabled for environment: $ENVIRONMENT (dev env doesn't deploy backend)"
+          fi
+          
           echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
           echo "should_run_e2e=$SHOULD_RUN_E2E" >> $GITHUB_OUTPUT
+          echo "should_deploy_backend=$SHOULD_DEPLOY_BACKEND" >> $GITHUB_OUTPUT
           echo "📍 Final environment: $ENVIRONMENT"
           echo "🧪 E2E enabled: $SHOULD_RUN_E2E"
+          echo "🔧 Backend deployment enabled: $SHOULD_DEPLOY_BACKEND"
           echo "=== END UNIFIED ENVIRONMENT DETECTION ==="
