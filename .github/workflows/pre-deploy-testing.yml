@@ -18,18 +18,24 @@ env:
 jobs:
   determine-environment:
     runs-on: ubuntu-latest
-    # Skip if environment was injected via workflow_call, run if standalone
-    if: ${{ github.event_name != 'workflow_call' || !inputs.environment }}
+    # Always run, but use injected environment when available
     outputs:
-      environment: ${{ steps.env.outputs.environment }}
+      environment: ${{ inputs.environment || steps.env.outputs.environment }}
     steps:
       - name: Determine environment
         id: env
         run: |
+          echo "=== PRE-DEPLOY TESTING ENVIRONMENT DEBUG ==="
+          echo "Event name: '${{ github.event_name }}'"
+          echo "Inputs environment: '${{ inputs.environment }}'"
+          echo "Github ref: '${{ github.ref }}'"
+          echo "Should skip check: event_name='${{ github.event_name }}' && inputs.environment='${{ inputs.environment }}'"
+          
           # Priority: 1) workflow_call input, 2) branch-based detection
           if [ "${{ github.event_name }}" = "workflow_call" ] && [ -n "${{ inputs.environment }}" ]; then
             ENVIRONMENT="${{ inputs.environment }}"
             echo "🎯 Using injected environment from orchestrated workflow: $ENVIRONMENT"
+            echo "⚡ FAST PATH: Environment was injected, skipping branch detection"
           elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
             ENVIRONMENT="dev"
             echo "🎯 Branch-based environment (main): $ENVIRONMENT"
@@ -46,6 +52,7 @@ jobs:
           
           echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
           echo "🌍 Final testing environment: $ENVIRONMENT"
+          echo "=== END PRE-DEPLOY TESTING DEBUG ==="
 
   tests:
     runs-on: ubuntu-latest
