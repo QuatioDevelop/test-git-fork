@@ -65,10 +65,12 @@ jobs:
 
       - name: Build applications
         run: |
-          echo "🏗️ Building applications..."
-          npm run build
-          npm run export
-          echo "✅ Build completed"
+          echo "🏗️ [FAKE] Building applications..."
+          echo "⚡ Skipping real build for faster testing"
+          mkdir -p apps/client/out apps/admin/out
+          echo "<h1>Fake Client Build - Frontend Deploy</h1>" > apps/client/out/index.html
+          echo "<h1>Fake Admin Build - Frontend Deploy</h1>" > apps/admin/out/index.html
+          echo "✅ Build completed (simulated)"
 
       - name: Configure AWS credentials
         run: |
