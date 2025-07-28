@@ -1,6 +1,6 @@
 {
   "name": "sura-esenciafest-2025",
-  "version": "0.3.66",
+  "version": "0.3.67",
   "description": "Plataforma virtual para evento SURA - Semana del 18 de agosto 2025",
   "private": true,
   "workspaces": [
