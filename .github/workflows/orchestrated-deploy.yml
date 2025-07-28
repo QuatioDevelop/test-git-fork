@@ -27,31 +27,22 @@ env:
   NODE_VERSION: '22'
 
 jobs:
+  determine-environment:
+    uses: ./.github/workflows/determine-environment.yml
+
   detect-changes:
     runs-on: ubuntu-latest
+    needs: determine-environment
     outputs:
       backend-changed: ${{ steps.filter.outputs.backend }}
       frontend-changed: ${{ steps.filter.outputs.frontend }}
       should_test: ${{ steps.filter.outputs.has_changes }}
-      environment: ${{ steps.env.outputs.environment }}
+      environment: ${{ needs.determine-environment.outputs.environment }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Fetch full history to ensure merge base is available
-
-      - name: Determine environment
-        id: env
-        run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "environment=dev" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref }}" = "refs/heads/staging" ]; then
-            echo "environment=staging" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref }}" = "refs/heads/production" ]; then
-            echo "environment=prod" >> $GITHUB_OUTPUT
-          else
-            echo "environment=dev" >> $GITHUB_OUTPUT
-          fi
 
       - name: Detect file changes
         uses: dorny/paths-filter@v3
