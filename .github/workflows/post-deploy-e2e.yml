@@ -30,6 +30,16 @@ env:
   NODE_VERSION: '22'
 
 jobs:
+  debug-e2e-conditions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug E2E conditions
+        run: |
+          echo "=== E2E Debug Info ==="
+          echo "Event name: ${{ github.event_name }}"
+          echo "Workflow run conclusion: ${{ github.event.workflow_run.conclusion }}"
+          echo "Should run condition: ${{ github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}"
+
   determine-environment:
     runs-on: ubuntu-latest
     # Run for workflow_call, workflow_dispatch, or successful workflow_run
