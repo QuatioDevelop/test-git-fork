@@ -38,6 +38,9 @@ jobs:
           echo "=== E2E Debug Info ==="
           echo "Event name: ${{ github.event_name }}"
           echo "Workflow run conclusion: ${{ github.event.workflow_run.conclusion }}"
+          echo "Input environment: '${{ inputs.environment }}'"
+          echo "Github ref: '${{ github.ref }}'"
+          echo "Force run: '${{ inputs.force_run }}'"
           echo "Should run condition: ${{ github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}"
 
   determine-environment:
@@ -50,17 +53,29 @@ jobs:
       - name: Determine environment
         id: env
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" = "workflow_call" ]; then
-            echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+          # Priority: 1) workflow_call input, 2) workflow_dispatch input, 3) branch-based detection
+          if [ "${{ github.event_name }}" = "workflow_call" ] && [ -n "${{ inputs.environment }}" ]; then
+            ENVIRONMENT="${{ inputs.environment }}"
+            echo "🎯 Using injected environment from orchestrated workflow: $ENVIRONMENT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENVIRONMENT="${{ github.event.inputs.environment }}"
+            echo "🎯 Using manual dispatch environment: $ENVIRONMENT"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            ENVIRONMENT="dev"
+            echo "🎯 Branch-based environment (main): $ENVIRONMENT"
           elif [ "${{ github.ref }}" = "refs/heads/staging" ]; then
-            echo "environment=staging" >> $GITHUB_OUTPUT
+            ENVIRONMENT="staging"
+            echo "🎯 Branch-based environment (staging): $ENVIRONMENT"
           elif [ "${{ github.ref }}" = "refs/heads/production" ]; then
-            echo "environment=prod" >> $GITHUB_OUTPUT
+            ENVIRONMENT="prod"
+            echo "🎯 Branch-based environment (production): $ENVIRONMENT"
           else
-            echo "environment=staging" >> $GITHUB_OUTPUT
+            ENVIRONMENT="dev"
+            echo "🎯 Default environment (fallback): $ENVIRONMENT"
           fi
+          
+          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+          echo "📍 Final environment: $ENVIRONMENT"
           
       - name: Check if should run
         id: check
