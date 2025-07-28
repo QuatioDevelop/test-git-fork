@@ -49,15 +49,10 @@ jobs:
       - name: Attempt to download build artifacts from Pre-Deploy Testing
         id: download-from-testing
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v6
+        uses: actions/download-artifact@v4
         with:
-          workflow: pre-deploy-testing.yml
-          workflow_conclusion: success
           name: build-artifacts-${{ github.sha }}
-          commit: ${{ github.sha }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
           path: ./artifacts
-          if_no_artifact_found: warn
 
       - name: Check if artifacts were downloaded from testing
         id: check-testing-artifacts
