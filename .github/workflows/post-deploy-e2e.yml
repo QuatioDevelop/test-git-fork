@@ -120,16 +120,8 @@ jobs:
           # Use injected environment if available, otherwise use determined environment
           TEST_ENV: ${{ inputs.environment || needs.determine-environment.outputs.environment }}
           E2E_TEST_SECRET: ${{ secrets.E2E_TEST_SECRET }}
-          CLIENT_URL: ${{ 
-            (inputs.environment || needs.determine-environment.outputs.environment) == 'dev' && 'https://dev.esenciafest.com' ||
-            (inputs.environment || needs.determine-environment.outputs.environment) == 'staging' && 'https://staging.esenciafest.com' || 
-            'https://esenciafest.com' 
-          }}
-          NEXT_PUBLIC_API_BASE_URL: ${{ 
-            (inputs.environment || needs.determine-environment.outputs.environment) == 'dev' && 'https://api.dev.esenciafest.com' ||
-            (inputs.environment || needs.determine-environment.outputs.environment) == 'staging' && 'https://api.staging.esenciafest.com' || 
-            'https://api.esenciafest.com' 
-          }}
+          CLIENT_URL: ${{ (inputs.environment || needs.determine-environment.outputs.environment) == 'dev' && 'https://dev.esenciafest.com' || (inputs.environment || needs.determine-environment.outputs.environment) == 'staging' && 'https://staging.esenciafest.com' || 'https://esenciafest.com' }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ (inputs.environment || needs.determine-environment.outputs.environment) == 'dev' && 'https://api.dev.esenciafest.com' || (inputs.environment || needs.determine-environment.outputs.environment) == 'staging' && 'https://api.staging.esenciafest.com' || 'https://api.esenciafest.com' }}
         run: |
           echo "🌍 Testing against $TEST_ENV environment"
           echo "🔗 Client URL: $CLIENT_URL"
